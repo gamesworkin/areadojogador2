@@ -1,0 +1,74 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "usuarios": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'admin@admin.com')",
+        "pedidos": {
+          ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'admin@admin.com')"
+        },
+        "jogos_liberados": {
+          ".write": "auth.token.email === 'admin@admin.com'"
+        }
+      }
+    },
+
+    "mensagens": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'admin@admin.com')",
+        "$msgId": {
+          ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'admin@admin.com' || (!data.exists() && newData.exists() && newData.child('de_uid').val() === auth.uid))",
+          ".validate": "newData.hasChildren(['de_uid','para_uid','assunto','corpo','timestamp','pasta'])",
+          "assunto": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120" },
+          "corpo": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000" },
+          "lido": { ".validate": "newData.isBoolean()" },
+          "editado": { ".validate": "newData.isBoolean()" },
+          "editado_em": { ".validate": "newData.isNumber()" },
+          "$outros": { ".validate": true }
+        }
+      }
+    },
+
+    "sugestoes": {
+      ".read": "auth.token.email === 'admin@admin.com'",
+      "$sugestaoId": {
+        ".write": "auth != null && ((!data.exists() && newData.child('uid').val() === auth.uid) || auth.token.email === 'admin@admin.com')",
+        ".validate": "newData.hasChildren(['uid','assunto','texto','timestamp'])",
+        "assunto": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "texto": { ".validate": "newData.isString() && newData.val().length <= 2000" },
+        "$outros": { ".validate": true }
+      }
+    },
+
+    "cards_disponiveis": {
+      ".read": "auth != null",
+      ".write": "auth.token.email === 'admin@admin.com'"
+    },
+
+    "configuracao_menu_json": {
+      ".read": "auth != null",
+      ".write": "auth.token.email === 'admin@admin.com'"
+    },
+    "novidades": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'admin@admin.com'",
+      "$novidadeId": {
+        "comentarios": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    },
+      "temporada_atual": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'admin@admin.com'"
+    },
+      "temporadas": {
+      ".read": "auth != null && auth.token.email === 'admin@admin.com'",
+      ".write": "auth != null && auth.token.email === 'admin@admin.com'"
+    },
+  }
+}
