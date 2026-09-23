@@ -38,26 +38,19 @@ const perfWhatsApp = document.getElementById('perf-whatsapp');
 const btnRetrairVitrine = document.getElementById('btn-retrair-vitrine');
 const wrapperRetratilVitrine = document.getElementById('wrapper-retratil-vitrine');
 
-// Modais Novidades
-const modalNovidadesCliente = document.getElementById('modal-novidades-cliente');
-const modalDetalheNovidade = document.getElementById('modal-detalhe-novidade');
-const btnAbrirNovidadesCliente = document.getElementById('btn-abrir-novidades-cliente');
-
 let usuarioLogadoUid = null;
 let dadosClienteAtual = {};
 let filtroAdminAtual = "pendentes";
 let comprovanteBase64Global = "";
-let avatarBase64Temp = null;
+let avatarBase64Temp = null;      // null = não alterado
 let qrCodeBase64Temp = "";
 let cacheMensagensUsuario = {};
 let cacheUsuariosDiretorio = {};
 let cacheCardsAdmin = {};
 let cacheUsuariosAdmin = {};
-let cacheNovidades = {};
 let buscaUsuariosAdmin = "";
-let novidadesJaExibidasAuto = false;
 
-// Referências ativas para limpeza
+// Referências ativas (para desligar no logout e evitar dados remanescentes)
 const referenciasAtivas = [];
 function escutar(caminho, evento, callback) {
     const ref = database.ref(caminho);
@@ -168,157 +161,7 @@ if (tabLogin && tabCadastro) {
 }
 
 // ==========================================================================
-// SUBMIT DE LOGIN E CADASTRO
-// ==========================================================================
-const formLogin = document.getElementById('form-login');
-if (formLogin) {
-    formLogin.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
-        const senha = loginSenhaReal ? loginSenhaReal.value : "";
-
-        if (!email || !senha) {
-            alert("Preencha todos os campos para continuar.");
-            return;
-        }
-
-        const btnLogar = document.getElementById('btn-logar');
-        const overlayAuth = document.getElementById('overlay-auth-carregando');
-        if (btnLogar) { btnLogar.disabled = true; btnLogar.innerText = "ENTRANDO..."; }
-        if (overlayAuth) overlayAuth.classList.add('active');
-
-        try {
-            await auth.signInWithEmailAndPassword(email, senha);
-        } catch (error) {
-            if (overlayAuth) overlayAuth.classList.remove('active');
-            if (btnLogar) { btnLogar.disabled = false; btnLogar.innerText = "LOGAR NO HUB"; }
-            alert("Erro ao realizar login: " + error.message);
-        }
-    });
-}
-
-const formCadastroAuth = document.getElementById('form-cadastro-auth');
-if (formCadastroAuth) {
-    formCadastroAuth.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const nome = document.getElementById('cad-nome').value.trim();
-        const sobrenome = document.getElementById('cad-sobrenome').value.trim();
-        const whatsapp = document.getElementById('cad-whatsapp').value.trim();
-        const email = document.getElementById('cad-email').value.trim();
-        const senha = document.getElementById('cad-senha').value;
-
-        if (!validarProvedorEmail(email)) {
-            alert("Por favor, insira um e-mail válido com um provedor reconhecido.");
-            return;
-        }
-
-        const btnCadastrar = document.getElementById('btn-cadastrar');
-        const overlayAuth = document.getElementById('overlay-auth-carregando');
-        if (btnCadastrar) { btnCadastrar.disabled = true; btnCadastrar.innerText = "CADASTRANDO..."; }
-        if (overlayAuth) overlayAuth.classList.add('active');
-
-        try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, senha);
-            const uid = userCredential.user.uid;
-
-            await database.ref(`usuarios/${uid}`).set({
-                nome: nome,
-                sobrenome: sobrenome,
-                whatsapp: whatsapp,
-                email: email,
-                status_cadastro: "cadastrado",
-                data_criacao: Date.now()
-            });
-        } catch (error) {
-            if (overlayAuth) overlayAuth.classList.remove('active');
-            if (btnCadastrar) { btnCadastrar.disabled = false; btnCadastrar.innerText = "CADASTRAR E ENTRAR"; }
-            alert("Erro ao criar conta: " + error.message);
-        }
-    });
-}
-
-// Esqueci minha senha
-const btnEsqueciSenha = document.getElementById('btn-esqueci-senha');
-if (btnEsqueciSenha) {
-    btnEsqueciSenha.addEventListener('click', () => {
-        if (modalEsqueciSenha) modalEsqueciSenha.classList.add('active');
-    });
-}
-const btnFecharEsqueciSenha = document.getElementById('btn-fechar-esqueci-senha');
-if (btnFecharEsqueciSenha) {
-    btnFecharEsqueciSenha.addEventListener('click', () => {
-        if (modalEsqueciSenha) modalEsqueciSenha.classList.remove('active');
-    });
-}
-const formRecuperarSenha = document.getElementById('form-recuperar-senha-interno');
-if (formRecuperarSenha) {
-    formRecuperarSenha.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('recuperar-email').value.trim();
-        try {
-            await auth.sendPasswordResetEmail(email);
-            alert("E-mail de redefinição enviado com sucesso!");
-            if (modalEsqueciSenha) modalEsqueciSenha.classList.remove('active');
-        } catch (err) {
-            alert("Erro ao enviar e-mail: " + err.message);
-        }
-    });
-}
-
-// ==========================================================================
-// PAINEL ADMIN E NAVEGAÇÃO ENTRE ABAS
-// ==========================================================================
-function iniciarAmbienteAdmin() {
-    escutar('usuarios', 'value', snapshot => {
-        cacheUsuariosAdmin = snapshot.val() || {};
-        popularSelectDestinatariosAdmin();
-    });
-    ouvirSugestoesAdmin();
-    inicializarPainelAdmin();
-}
-
-const btnAbrirPainelAdmin = document.getElementById('btn-abrir-painel-admin');
-if (btnAbrirPainelAdmin) {
-    btnAbrirPainelAdmin.addEventListener('click', () => {
-        if (modalPainelAdmin) modalPainelAdmin.classList.add('active');
-    });
-}
-const btnFecharPainelAdmin = document.getElementById('btn-fechar-painel-admin');
-if (btnFecharPainelAdmin) {
-    btnFecharPainelAdmin.addEventListener('click', () => {
-        if (modalPainelAdmin) modalPainelAdmin.classList.remove('active');
-    });
-}
-
-function alternarAbaAdmin(nomeAba) {
-    document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
-        if (btn.dataset.abaAdmin === nomeAba) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
-    document.querySelectorAll('.pane-admin').forEach(pane => {
-        if (pane.id === `aba-admin-${nomeAba}`) pane.classList.add('active');
-        else pane.classList.remove('active');
-    });
-}
-
-document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (btn.dataset.abaAdmin) alternarAbaAdmin(btn.dataset.abaAdmin);
-    });
-});
-
-document.querySelectorAll('.btn-atalho-admin').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const aba = btn.dataset.abrirAba;
-        if (aba) {
-            alternarAbaAdmin(aba);
-            if (modalPainelAdmin) modalPainelAdmin.classList.add('active');
-        }
-    });
-});
-
-// ==========================================================================
-// RESET TOTAL DA TELA DE LOGIN
+// RESET TOTAL DA TELA DE LOGIN (sem resquícios após logout)
 // ==========================================================================
 function restaurarTelaLoginDoZero() {
     desligarTodasReferencias();
@@ -333,14 +176,13 @@ function restaurarTelaLoginDoZero() {
     cacheUsuariosDiretorio = {};
     cacheCardsAdmin = {};
     cacheUsuariosAdmin = {};
-    cacheNovidades = {};
     filtroAdminAtual = "pendentes";
     buscaUsuariosAdmin = "";
-    novidadesJaExibidasAuto = false;
 
+    // Limpa formulários de sessão
     ['form-login', 'form-cadastro-auth', 'form-comprovante', 'form-editar-perfil-cliente',
      'form-recuperar-senha-interno', 'form-nova-mensagem', 'form-sugestao',
-     'form-criar-card', 'form-msg-admin', 'form-criar-novidade', 'form-comentar-novidade'].forEach(id => {
+     'form-criar-card', 'form-msg-admin'].forEach(id => {
         const f = document.getElementById(id);
         if (f) f.reset();
     });
@@ -357,18 +199,19 @@ function restaurarTelaLoginDoZero() {
     const overlayAuth = document.getElementById('overlay-auth-carregando');
     if (overlayAuth) overlayAuth.classList.remove('active');
 
+    // Volta para a aba "Entrar"
     if (tabLogin && tabCadastro) {
         document.getElementById('form-login').classList.add('active');
         document.getElementById('form-cadastro-auth').classList.remove('active');
         tabLogin.classList.add('active'); tabCadastro.classList.remove('active');
     }
 
+    // Zera conteúdos dinâmicos que ficaram na memória do DOM
     ['grid-cards-cliente', 'grid-vitrine-vendas', 'container-links-menu', 'lista-usuarios-admin',
      'lista-cards-criados', 'lista-email-entrada', 'lista-email-enviados',
      'lista-sugestoes-admin', 'lista-conferencia-pagamentos', 'grid-kpis-dashboard',
      'grid-kpis-relatorios', 'grid-kpis-pagamentos', 'tabela-vendas-patch',
-     'tabela-novos-usuarios', 'construtor-menu-visual-container', 'lista-novidades-admin',
-     'lista-novidades-cliente', 'lista-historico-temporadas'].forEach(id => {
+     'tabela-novos-usuarios', 'construtor-menu-visual-container'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = "";
     });
@@ -377,19 +220,12 @@ function restaurarTelaLoginDoZero() {
     if (fileInfo) fileInfo.innerText = "Nenhum arquivo selecionado";
     const badge = document.getElementById('badge-emails-nao-lidos');
     if (badge) badge.style.display = "none";
-    const badgeNov = document.getElementById('badge-novidades-nao-lidas');
-    if (badgeNov) badgeNov.style.display = "none";
     const avatarHeader = document.getElementById('avatar-header-circulo');
     if (avatarHeader) avatarHeader.innerHTML = "?";
 
     try { sessionStorage.clear(); } catch (e) { /* ignore */ }
 
     irParaTela(viewAuth);
-}
-
-// Deslogar
-function deslogar() {
-    auth.signOut().then(() => restaurarTelaLoginDoZero());
 }
 
 // ==========================================================================
@@ -502,7 +338,9 @@ function fecharModalJogo() {
     if (modalDetailsContainerGamer) modalDetailsContainerGamer.classList.remove('active');
 }
 
-// Cópia blindada
+// ==========================================================================
+// CÓPIA BLINDADA
+// ==========================================================================
 function ejecutarCopiaGamerBlindada(textoParaCopiar, elementoBotao) {
     const textoOriginal = elementoBotao.innerHTML;
     if (navigator.clipboard && window.isSecureContext) {
@@ -530,7 +368,9 @@ function executarMetodoCopiaAntigo(texto, botao, textoOrig) {
     setTimeout(() => { botao.innerHTML = textoOrig; }, 2000);
 }
 
-// Modal Jogo / Checkout
+// ==========================================================================
+// MODAL DE JOGO / CHECKOUT COM COPIA E COLA + QR CODE
+// ==========================================================================
 function abrirModalJogo(card, modoLojaVenda = false, cardId = "") {
     const imgCapa = document.getElementById('modal-jogo-capa');
     if (!imgCapa) return;
@@ -580,10 +420,13 @@ function abrirModalJogo(card, modoLojaVenda = false, cardId = "") {
                 document.getElementById('texto-chave-pix-checkout').innerText = pixFinalCard;
 
                 comprovanteBase64Global = "";
+                if (fileInfoElement) fileInfoElement.innerText = "Nenhum arquivo selecionado";
+                if (inputComprovanteElement) inputComprovanteElement.value = "";
 
                 const btnCopiarCheckout = document.getElementById('btn-copiar-pix-checkout');
                 if (btnCopiarCheckout) btnCopiarCheckout.onclick = () => ejecutarCopiaGamerBlindada(pixFinalCard, btnCopiarCheckout);
 
+                // PIX Copia e Cola
                 const caixaCC = document.getElementById('caixa-copia-cola-checkout');
                 const textoCC = document.getElementById('texto-copia-cola-checkout');
                 const btnCC = document.getElementById('btn-copiar-copia-cola-checkout');
@@ -597,6 +440,7 @@ function abrirModalJogo(card, modoLojaVenda = false, cardId = "") {
                     }
                 }
 
+                // QR Code
                 const caixaQR = document.getElementById('caixa-qrcode-checkout');
                 const imgQR = document.getElementById('img-qrcode-checkout');
                 if (caixaQR && imgQR) {
@@ -653,6 +497,8 @@ function abrirLightboxQr(base64) {
     img.src = base64;
     lb.classList.add('active');
 }
+const btnFecharLightboxQr = document.getElementById('btn-fechar-lightbox-qr');
+if (btnFecharLightboxQr) btnFecharLightboxQr.addEventListener('click', () => document.getElementById('lightbox-qrcode').classList.remove('active'));
 
 function baixarBase64(base64, nomeArquivo) {
     const a = document.createElement('a');
@@ -663,6 +509,9 @@ function baixarBase64(base64, nomeArquivo) {
     a.remove();
 }
 
+// ==========================================================================
+// CONVERSÃO DE IMAGENS PARA BASE64 (com redimensionamento)
+// ==========================================================================
 function converterImagemParaBase64(arquivo, ladoMaximo, quadrado) {
     return new Promise((resolve, reject) => {
         if (!arquivo.type.startsWith('image/')) return reject(new Error("Selecione um arquivo de imagem."));
@@ -697,7 +546,21 @@ function converterImagemParaBase64(arquivo, ladoMaximo, quadrado) {
     });
 }
 
-// CARDS E MENU CLIENTE
+// ==========================================================================
+// CARDS DO CLIENTE E MENU HORIZONTAL
+// ==========================================================================
+function alimentarSelectComCards(selectElement, jogosJaLiberados = {}) {
+    if (!selectElement) return;
+    database.ref('cards_disponiveis').once('value', snapshot => {
+        const cards = snapshot.val() || {};
+        Object.keys(cards).forEach(cardId => {
+            const opt = document.createElement('option'); opt.value = cardId;
+            opt.innerText = cards[cardId].titulo + (jogosJaLiberados[cardId] ? " (Ativo)" : "");
+            selectElement.appendChild(opt);
+        });
+    });
+}
+
 function ouvirCardsDoCliente(uid) {
     if (!gridCardsCliente) return;
     escutar(`usuarios/${uid}/jogos_liberados`, 'value', snapshotLiberados => {
@@ -774,6 +637,7 @@ function ouvirEConstruirMenuCliente() {
     });
 }
 
+// Hambúrguer apenas quando o menu não cabe horizontalmente
 function verificarEncaixeDoMenu() {
     const menuContainer = document.getElementById('area-menu-dinamico');
     const linksList = document.getElementById('container-links-menu');
@@ -789,6 +653,22 @@ function verificarEncaixeDoMenu() {
     }
 }
 
+const btnHamburguerMenu = document.getElementById('btn-hamburguer-menu');
+if (btnHamburguerMenu) {
+    btnHamburguerMenu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('area-menu-dinamico').classList.toggle('aberto');
+    });
+}
+window.addEventListener('resize', () => {
+    clearTimeout(window.__timerMenu);
+    window.__timerMenu = setTimeout(verificarEncaixeDoMenu, 150);
+});
+
+document.addEventListener('click', () => {
+    document.querySelectorAll('.nav-dinamica-item').forEach(el => el.classList.remove('submenu-visivel'));
+});
+
 function inicializarBotaoWhatsApp() {
     const whatsappNumero = "5588988470190";
     const btnWhats = document.getElementById('btn-whatsapp-flutuante');
@@ -796,480 +676,2253 @@ function inicializarBotaoWhatsApp() {
 }
 
 // ==========================================================================
-// MÓDULO DE NOVIDADES (CLIENTE E ADMIN)
+// SISTEMA DE ARRASTAR E SOLTAR (mouse + toque) PARA ORDENAÇÃO
 // ==========================================================================
-function ouvirNovidadesCliente(uid) {
-    escutar('novidades', 'value', snapshot => {
-        cacheNovidades = snapshot.val() || {};
-        database.ref(`usuarios/${uid}/novidades_lidas`).once('value', lidasSnap => {
-            const lidasMap = lidasSnap.val() || {};
-            let naoLidasContador = 0;
-            let novidadeAvisarAuto = null;
+function tornarOrdenavel(container, seletorItem) {
+    if (!container || container.dataset.ordenavel === "1") return;
+    container.dataset.ordenavel = "1";
+    container.dataset.seletorItem = seletorItem;
 
-            const listaArr = Object.keys(cacheNovidades).map(id => ({ id, ...cacheNovidades[id] }));
-            listaArr.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    container.addEventListener('pointerdown', (evento) => {
+        const punho = evento.target.closest('.punho-arrasto');
+        if (!punho || !container.contains(punho)) return;
+        // Garante que o punho pertence a ESTE container (evita conflito entre
+        // a lista de categorias e as listas de links dentro de cada categoria)
+        if (punho.closest('[data-ordenavel="1"]') !== container) return;
 
-            listaArr.forEach(nov => {
-                if (!lidasMap[nov.id]) {
-                    naoLidasContador++;
-                    if (!novidadeAvisarAuto) novidadeAvisarAuto = nov;
-                }
-            });
+        const item = punho.closest(seletorItem);
+        if (!item || item.parentElement !== container) return;
 
-            const badge = document.getElementById('badge-novidades-nao-lidas');
-            if (badge) {
-                if (naoLidasContador > 0) {
-                    badge.innerText = naoLidasContador;
-                    badge.style.display = "inline-block";
-                } else {
-                    badge.style.display = "none";
-                }
+        evento.preventDefault();
+        evento.stopPropagation();
+        try { punho.setPointerCapture(evento.pointerId); } catch (e) { /* ignora */ }
+        item.classList.add('arrastando');
+
+        const mover = (ev) => {
+            const irmaos = Array.from(container.children).filter(el => el.matches(seletorItem) && el !== item);
+            let referencia = null;
+            for (const irmao of irmaos) {
+                const r = irmao.getBoundingClientRect();
+                if (ev.clientY < r.top + r.height / 2) { referencia = irmao; break; }
             }
-
-            // Exibe automaticamente pop-up da novidade não lida no login
-            if (novidadeAvisarAuto && !novidadesJaExibidasAuto) {
-                novidadesJaExibidasAuto = true;
-                abrirModalDetalheNovidade(novidadeAvisarAuto.id, true);
+            if (referencia) {
+                if (referencia !== item.nextElementSibling) container.insertBefore(item, referencia);
+            } else if (container.lastElementChild !== item) {
+                container.appendChild(item);
             }
-        });
+        };
+
+        const soltar = () => {
+            item.classList.remove('arrastando');
+            try { punho.releasePointerCapture(evento.pointerId); } catch (e) { /* ignora */ }
+            punho.removeEventListener('pointermove', mover);
+            document.removeEventListener('pointermove', mover);
+            punho.removeEventListener('pointerup', soltar);
+            punho.removeEventListener('pointercancel', soltar);
+            document.removeEventListener('pointerup', soltar);
+            document.removeEventListener('pointercancel', soltar);
+            renumerarOrdem(container);
+        };
+
+        punho.addEventListener('pointermove', mover);
+        document.addEventListener('pointermove', mover);
+        punho.addEventListener('pointerup', soltar);
+        punho.addEventListener('pointercancel', soltar);
+        // Segurança: se o ponteiro for solto fora do punho, finaliza mesmo assim
+        document.addEventListener('pointerup', soltar);
+        document.addEventListener('pointercancel', soltar);
+    });
+
+    // Ordenação por número digitado
+    container.addEventListener('input', (ev) => {
+        const campo = ev.target.closest('.input-ordem');
+        if (!campo || campo.closest('[data-ordenavel="1"]') !== container) return;
+        clearTimeout(campo.__timerOrdem);
+        campo.__timerOrdem = setTimeout(() => aplicarOrdemDigitada(container, campo), 350);
+    });
+    container.addEventListener('change', (ev) => {
+        const campo = ev.target.closest('.input-ordem');
+        if (!campo || campo.closest('[data-ordenavel="1"]') !== container) return;
+        clearTimeout(campo.__timerOrdem);
+        aplicarOrdemDigitada(container, campo);
     });
 }
 
-function renderizarListaNovidadesCliente() {
-    const container = document.getElementById('lista-novidades-cliente');
+// Reescreve os números 1..N na ordem visual atual
+function renumerarOrdem(container) {
     if (!container) return;
-
-    database.ref(`usuarios/${usuarioLogadoUid}/novidades_lidas`).once('value', lidasSnap => {
-        const lidasMap = lidasSnap.val() || {};
-        const listaArr = Object.keys(cacheNovidades).map(id => ({ id, ...cacheNovidades[id] }));
-        listaArr.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-        if (listaArr.length === 0) {
-            container.innerHTML = `<p class="vazio-lista">Nenhuma novidade lançada ainda.</p>`;
-            return;
-        }
-
-        container.innerHTML = listaArr.map(nov => {
-            const lida = !!lidasMap[nov.id];
-            return `
-                <div class="user-item" onclick="abrirModalDetalheNovidade('${nov.id}')" style="cursor:pointer; border-left:4px solid ${lida ? '#242f41' : '#ffcc00'};">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h4 style="margin:0; color:#fff;">${escapar(nov.titulo)}</h4>
-                        ${!lida ? '<span style="background:#ffcc00; color:#000; font-size:0.65rem; font-weight:bold; padding:2px 6px; border-radius:3px;">NOVO</span>' : ''}
-                    </div>
-                    <p style="font-size:0.75rem; color:#8899a6; margin:4px 0 0 0;">${formatarData(nov.timestamp)}</p>
-                </div>
-            `;
-        }).join("");
-    });
-}
-
-if (btnAbrirNovidadesCliente) {
-    btnAbrirNovidadesCliente.addEventListener('click', () => {
-        renderizarListaNovidadesCliente();
-        if (modalNovidadesCliente) modalNovidadesCliente.classList.add('active');
-    });
-}
-
-const btnFecharNovidadesCliente = document.getElementById('btn-fechar-novidades-cliente');
-if (btnFecharNovidadesCliente) btnFecharNovidadesCliente.addEventListener('click', () => modalNovidadesCliente.classList.remove('active'));
-
-const btnFecharDetalheNovidade = document.getElementById('btn-fechar-detalhe-novidade');
-if (btnFecharDetalheNovidade) btnFecharDetalheNovidade.addEventListener('click', () => modalDetalheNovidade.classList.remove('active'));
-
-function abrirModalDetalheNovidade(id, autoExibicao = false) {
-    const nov = cacheNovidades[id];
-    if (!nov) return;
-
-    document.getElementById('detalhe-novidade-titulo').innerText = nov.titulo;
-    document.getElementById('detalhe-novidade-data').innerText = `Lançado em: ${formatarData(nov.timestamp)}`;
-    document.getElementById('detalhe-novidade-descricao').innerText = nov.descricao;
-
-    // Downloads
-    const containerDl = document.getElementById('container-downloads-novidade');
-    containerDl.innerHTML = "";
-    if (nov.botoes && nov.botoes.length > 0) {
-        nov.botoes.forEach(btn => {
-            const b = document.createElement('button');
-            b.className = 'btn-download-dinamico';
-            b.innerText = btn.texto;
-            b.onclick = () => window.open(btn.url, '_blank');
-            containerDl.appendChild(b);
+    const seletorItem = container.dataset.seletorItem;
+    if (!seletorItem) return;
+    Array.from(container.children)
+        .filter(el => el.matches(seletorItem))
+        .forEach((el, indice) => {
+            const campo = el.querySelector(':scope .input-ordem');
+            if (campo) campo.value = indice + 1;
         });
-    }
-
-    // Comentários
-    const formComentar = document.getElementById('form-comentar-novidade');
-    const msgDesativados = document.getElementById('msg-comentarios-desativados');
-    document.getElementById('novidade-id-comentario').value = id;
-
-    if (nov.permitir_comentarios !== false) {
-        if (formComentar) formComentar.style.display = "block";
-        if (msgDesativados) msgDesativados.style.display = "none";
-    } else {
-        if (formComentar) formComentar.style.display = "none";
-        if (msgDesativados) msgDesativados.style.display = "block";
-    }
-
-    ouvirComentariosNovidade(id);
-
-    // Marca como lida para o utilizador
-    if (usuarioLogadoUid) {
-        database.ref(`usuarios/${usuarioLogadoUid}/novidades_lidas/${id}`).set(true);
-    }
-
-    if (modalNovidadesCliente) modalNovidadesCliente.classList.remove('active');
-    if (modalDetalheNovidade) modalDetalheNovidade.classList.add('active');
 }
 
-function ouvirComentariosNovidade(novidadeId) {
-    const lista = document.getElementById('lista-comentarios-novidade');
-    if (!lista) return;
+// Move o item para a posição digitada pelo usuário
+function aplicarOrdemDigitada(container, campo) {
+    const seletorItem = container.dataset.seletorItem;
+    if (!seletorItem) return;
+    const item = campo.closest(seletorItem);
+    if (!item || item.parentElement !== container) return;
 
-    database.ref(`novidades/${novidadeId}/comentarios`).on('value', snapshot => {
-        const coms = snapshot.val() || {};
-        const arr = Object.keys(coms).map(cid => ({ cid, ...coms[cid] }));
-        arr.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    const itens = Array.from(container.children).filter(el => el.matches(seletorItem));
+    const total = itens.length;
+    let destino = parseInt(campo.value, 10);
+    if (isNaN(destino)) return;
+    if (destino < 1) destino = 1;
+    if (destino > total) destino = total;
 
-        if (arr.length === 0) {
-            lista.innerHTML = `<p class="vazio-lista" style="font-size:0.8rem;">Nenhum comentário ainda. Seja o primeiro!</p>`;
-            return;
-        }
+    const restantes = itens.filter(el => el !== item);
+    const referencia = restantes[destino - 1] || null;
+    if (referencia) container.insertBefore(item, referencia);
+    else container.appendChild(item);
 
-        lista.innerHTML = arr.map(c => `
-            <div style="background:#121824; border:1px solid #1f2a3c; padding:8px 12px; border-radius:6px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:0.8rem; color:#00ff66;">${escapar(c.autor_nome)}</strong>
-                    <span style="font-size:0.65rem; color:#8899a6;">${formatarData(c.timestamp)}</span>
-                </div>
-                <p style="font-size:0.85rem; color:#fff; margin:4px 0 0 0; white-space:pre-wrap;">${escapar(c.texto)}</p>
-                ${usuarioLogadoUid && (dadosClienteAtual.email === EMAIL_ADMIN) ? `<button type="button" onclick="deletarComentarioNovidade('${novidadeId}', '${c.cid}')" style="background:none; border:none; color:#ff5555; font-size:0.7rem; cursor:pointer; padding:0; margin-top:4px;">Deletar comentário</button>` : ''}
-            </div>
-        `).join("");
-    });
+    const foco = document.activeElement === campo;
+    renumerarOrdem(container);
+    if (foco) { campo.value = destino; campo.focus(); campo.select(); }
+    item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-const formComentarNovidade = document.getElementById('form-comentar-novidade');
-if (formComentarNovidade) {
-    formComentarNovidade.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('novidade-id-comentario').value;
-        const texto = document.getElementById('texto-comentario-novidade').value.trim();
-        if (!texto || !id) return;
-
-        const nomeAutor = dadosClienteAtual.nome ? `${dadosClienteAtual.nome} ${dadosClienteAtual.sobrenome || ''}` : 'Administrador';
-
+// ==========================================================================
+// CONSTRUTOR VISUAL DO MENU (ADMIN)
+// ==========================================================================
+function ouvirEPovoarMenuVisualAdmin() {
+    const containerVisual = document.getElementById('construtor-menu-visual-container');
+    if (!containerVisual) return;
+    database.ref('configuracao_menu_json').once('value', snapshot => {
+        containerVisual.innerHTML = "";
+        const rawJson = snapshot.val() || "";
+        tornarOrdenavel(containerVisual, '.bloco-categoria-visual');
+        if (!rawJson.trim()) return;
         try {
-            await database.ref(`novidades/${id}/comentarios`).push({
-                uid: usuarioLogadoUid,
-                autor_nome: nomeAutor,
-                texto: texto,
-                timestamp: Date.now()
-            });
-            document.getElementById('texto-comentario-novidade').value = "";
-        } catch (err) { alert("Erro ao comentar: " + err.message); }
+            const categoriasData = JSON.parse(rawJson);
+            if (Array.isArray(categoriasData)) {
+                categoriasData.forEach(cat => {
+                    adicionarBlocoCategoriaVisual(cat.categoria, cat.subcategorias, cat.tipo || "menu", cat.url_categoria || "", cat.nova_aba !== false);
+                });
+            }
+        } catch (e) { /* json inválido */ }
     });
 }
 
-function deletarComentarioNovidade(novidadeId, comentarioId) {
-    if (confirm("Apagar este comentário?")) {
-        database.ref(`novidades/${novidadeId}/comentarios/${comentarioId}`).remove();
+function adicionarBlocoCategoriaVisual(nomeCategoria = "", subcategoriasArr = [], tipoCategoria = "menu", urlCategoria = "", novaAba = true) {
+    const containerVisual = document.getElementById('construtor-menu-visual-container');
+    if (!containerVisual) return;
+    tornarOrdenavel(containerVisual, '.bloco-categoria-visual');
+
+    const blocoId = 'cat-' + Date.now() + Math.floor(Math.random() * 1000);
+    const divBloco = document.createElement('div');
+    divBloco.className = 'bloco-categoria-visual';
+    divBloco.id = blocoId;
+    divBloco.innerHTML = `
+        <div style="display: flex; gap: 8px; margin-bottom: 5px; align-items:center;">
+            <span class="punho-arrasto" title="Arraste para reordenar">⠿</span>
+            <input type="number" min="1" class="input-ordem" title="Digite a posição do menu" placeholder="Nº">
+            <input type="text" class="input-nome-categoria" placeholder="Título da Categoria" value="${escapar(nomeCategoria)}" style="margin-bottom:0; font-weight:bold; border-color:#00ff66;">
+            <button type="button" onclick="removerBlocoCategoriaVisual('${blocoId}')" class="btn-sair" style="margin-top:0; padding:6px 12px; height:38px;">Deletar</button>
+        </div>
+        <div class="radio-tipo-container">
+            <label><input type="radio" name="tipo-${blocoId}" value="menu" ${tipoCategoria === "menu" ? "checked" : ""} onclick="alternarTipoCategoriaVisual('${blocoId}')"> 📁 Menu Retrátil</label>
+            <label><input type="radio" name="tipo-${blocoId}" value="link" ${tipoCategoria === "link" ? "checked" : ""} onclick="alternarTipoCategoriaVisual('${blocoId}')"> 🔗 Link Direto</label>
+        </div>
+        <div class="container-url-categoria-direta" style="display: ${tipoCategoria === "link" ? "block" : "none"}; margin-bottom: 10px;">
+            <input type="url" class="input-url-categoria" placeholder="URL de Destino" value="${escapar(urlCategoria)}" style="margin-bottom:8px; border-color:#00ff66;">
+            <label class="opcao-inline"><input type="checkbox" class="check-nova-aba-categoria" ${novaAba ? "checked" : ""}> Abrir em outra aba</label>
+        </div>
+        <div class="wrapper-subcategorias-area" style="display: ${tipoCategoria === "menu" ? "block" : "none"};">
+            <div class="container-subcategorias-rows" style="padding-left: 15px; border-left: 2px dashed #242f41;"></div>
+            <button type="button" onclick="adicionarLinhaSubcategoriaVisual('${blocoId}')" class="btn-link" style="color:#00ff66; margin-top: 5px; font-size: 0.8rem; text-align: left; display:block;">+ Adicionar Link</button>
+        </div>
+    `;
+    containerVisual.appendChild(divBloco);
+    renumerarOrdem(containerVisual);
+
+    const rows = divBloco.querySelector('.container-subcategorias-rows');
+    tornarOrdenavel(rows, '.linha-subcategoria-visual');
+
+    if (subcategoriasArr && subcategoriasArr.length > 0) {
+        subcategoriasArr.forEach(sub => adicionarLinhaSubcategoriaVisual(blocoId, sub.texto, sub.url, sub.nova_aba !== false));
     }
 }
 
-// ADMIN: NOVIDADES
-const formCriarNovidade = document.getElementById('form-criar-novidade');
-if (formCriarNovidade) {
-    formCriarNovidade.addEventListener('submit', async (e) => {
+function alternarTipoCategoriaVisual(blocoId) {
+    const bloco = document.getElementById(blocoId);
+    if (!bloco) return;
+    const tipo = bloco.querySelector(`input[name="tipo-${blocoId}"]:checked`).value;
+    const areaSub = bloco.querySelector('.wrapper-subcategorias-area');
+    const areaUrlDireta = bloco.querySelector('.container-url-categoria-direta');
+    if (tipo === 'link') {
+        if (areaSub) areaSub.style.display = 'none';
+        if (areaUrlDireta) areaUrlDireta.style.display = 'block';
+    } else {
+        if (areaSub) areaSub.style.display = 'block';
+        if (areaUrlDireta) areaUrlDireta.style.display = 'none';
+    }
+}
+
+function adicionarLinhaSubcategoriaVisual(blocoId, txtLink = "", urlLink = "", novaAba = true) {
+    const bloco = document.getElementById(blocoId);
+    if (!bloco) return;
+    const containerRows = bloco.querySelector('.container-subcategorias-rows');
+    if (!containerRows) return;
+    tornarOrdenavel(containerRows, '.linha-subcategoria-visual');
+
+    const rowId = 'row-' + Date.now() + Math.floor(Math.random() * 1000);
+    const divRow = document.createElement('div');
+    divRow.className = 'linha-subcategoria-visual';
+    divRow.id = rowId;
+    divRow.innerHTML = `
+        <span class="punho-arrasto" title="Arraste para reordenar">⠿</span>
+        <input type="number" min="1" class="input-ordem" title="Digite a posição do link" placeholder="Nº">
+        <input type="text" class="sub-txt" placeholder="Texto" value="${escapar(txtLink)}" style="flex: 1;">
+        <input type="url" class="sub-url" placeholder="URL" value="${escapar(urlLink)}" style="flex: 1.5;">
+        <label class="opcao-inline" style="margin:0;"><input type="checkbox" class="check-nova-aba-sub" ${novaAba ? "checked" : ""}> nova aba</label>
+        <button type="button" onclick="removerLinhaSubcategoriaVisual('${rowId}')" class="btn-sair" style="background:#421414; color:#ff3333; margin-top:0; border:1px solid #ff3333; height:38px; padding:0 10px;">Excluir</button>
+    `;
+    containerRows.appendChild(divRow);
+    renumerarOrdem(containerRows);
+}
+
+const btnSalvarVisualMenu = document.getElementById('btn-salvar-visual-menu');
+if (btnSalvarVisualMenu) {
+    btnSalvarVisualMenu.addEventListener('click', async () => {
+        const blocos = document.querySelectorAll('.bloco-categoria-visual');
+        const estruturaMenuFinal = [];
+        let dadosValidos = true;
+
+        blocos.forEach(bloco => {
+            const nomeCat = bloco.querySelector('.input-nome-categoria').value.trim();
+            if (!nomeCat) return;
+            const tipoSelecionado = bloco.querySelector(`input[name="tipo-${bloco.id}"]:checked`).value;
+            const urlCategoriaDireta = bloco.querySelector('.input-url-categoria').value.trim();
+            const novaAbaCategoria = bloco.querySelector('.check-nova-aba-categoria').checked;
+            const subcategorias = [];
+
+            if (tipoSelecionado === "link") {
+                if (!urlCategoriaDireta) dadosValidos = false;
+            } else {
+                bloco.querySelectorAll('.linha-subcategoria-visual').forEach(linha => {
+                    const txt = linha.querySelector('.sub-txt').value.trim();
+                    const url = linha.querySelector('.sub-url').value.trim();
+                    const nova = linha.querySelector('.check-nova-aba-sub').checked;
+                    if (txt && url) subcategorias.push({ texto: txt, url: url, nova_aba: nova });
+                    else if (txt || url) dadosValidos = false;
+                });
+            }
+
+            estruturaMenuFinal.push({
+                categoria: nomeCat,
+                tipo: tipoSelecionado,
+                url_categoria: tipoSelecionado === "link" ? urlCategoriaDireta : "",
+                nova_aba: novaAbaCategoria,
+                subcategorias: tipoSelecionado === "menu" ? subcategorias : []
+            });
+        });
+
+        if (!dadosValidos) { alert("⚠️ Existem campos incompletos no construtor."); return; }
+        try {
+            await database.ref('configuracao_menu_json').set(estruturaMenuFinal.length > 0 ? JSON.stringify(estruturaMenuFinal, null, 2) : "");
+            alert("🚀 Menu Horizontal atualizado com sucesso!");
+        } catch (e) { alert("Erro: " + e.message); }
+    });
+}
+
+function removerLinhaSubcategoriaVisual(rowId) {
+    const linha = document.getElementById(rowId);
+    if (!linha) return;
+    const pai = linha.parentElement;
+    linha.remove();
+    renumerarOrdem(pai);
+}
+
+function removerBlocoCategoriaVisual(blocoId) {
+    if (confirm("⚠️ Deseja deletar toda essa categoria?")) {
+        const elem = document.getElementById(blocoId);
+        const pai = elem ? elem.parentElement : null;
+        if (elem) elem.remove();
+        renumerarOrdem(pai);
+    }
+}
+
+// ==========================================================================
+// FORMULÁRIO DE CARDS (COM PIX COPIA E COLA + QR CODE)
+// ==========================================================================
+const btnEscolherQrCard = document.getElementById('btn-escolher-qr-card');
+const inputQrCard = document.getElementById('input-qr-card');
+const previewQrCard = document.getElementById('preview-qr-card');
+const statusQrCard = document.getElementById('status-qr-card');
+
+if (btnEscolherQrCard && inputQrCard) {
+    btnEscolherQrCard.addEventListener('click', () => inputQrCard.click());
+    inputQrCard.addEventListener('change', async (e) => {
+        const arquivo = e.target.files && e.target.files[0];
+        if (!arquivo) return;
+        try {
+            statusQrCard.innerText = "Convertendo imagem...";
+            qrCodeBase64Temp = await converterImagemParaBase64(arquivo, 600, true);
+            previewQrCard.src = qrCodeBase64Temp;
+            statusQrCard.innerText = "✅ QR Code convertido em base64 (1:1).";
+        } catch (erro) {
+            qrCodeBase64Temp = "";
+            statusQrCard.innerText = "❌ " + erro.message;
+        }
+    });
+}
+const btnRemoverQrCard = document.getElementById('btn-remover-qr-card');
+if (btnRemoverQrCard) {
+    btnRemoverQrCard.addEventListener('click', () => {
+        qrCodeBase64Temp = "";
+        if (previewQrCard) previewQrCard.src = "";
+        if (inputQrCard) inputQrCard.value = "";
+        if (statusQrCard) statusQrCard.innerText = "Nenhuma imagem carregada.";
+    });
+}
+
+const formCriarCard = document.getElementById('form-criar-card');
+if (formCriarCard) {
+    formCriarCard.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const idEdicao = document.getElementById('novidade-id-edicao').value;
+        const idEdicao = document.getElementById('card-id-edicao').value;
         const botoes = [];
         for (let i = 1; i <= 4; i++) {
-            const txt = document.getElementById(`nov-btn-txt-${i}`).value.trim();
-            const url = document.getElementById(`nov-btn-url-${i}`).value.trim();
+            const txt = document.getElementById(`btn-txt-${i}`).value.trim();
+            const url = document.getElementById(`btn-url-${i}`).value.trim();
             if (txt && url) botoes.push({ texto: txt, url: url });
         }
 
-        const dadosNovidade = {
-            titulo: document.getElementById('novidade-titulo').value.trim(),
-            descricao: document.getElementById('novidade-descricao').value.trim(),
-            permitir_comentarios: document.getElementById('novidade-permitir-comentarios').checked,
-            botoes: botoes,
-            timestamp: Date.now()
+        const dadosCard = {
+            titulo: document.getElementById('card-titulo').value.trim(),
+            capa_url: document.getElementById('card-capa').value.trim(),
+            descricao: document.getElementById('card-descricao').value.trim(),
+            preco: document.getElementById('card-preco').value.trim(),
+            pix: document.getElementById('card-pix').value.trim(),
+            pix_copia_cola: document.getElementById('card-pix-copia-cola').value.trim(),
+            pix_qr_base64: qrCodeBase64Temp || "",
+            senha_patch: document.getElementById('card-senha-patch').value.trim(),
+            botoes: botoes
         };
 
         try {
             if (idEdicao) {
-                await database.ref(`novidades/${idEdicao}`).update(dadosNovidade);
-                alert("✨ Novidade atualizada!");
-                cancelarEdicaoNovidade();
+                await database.ref(`cards_disponiveis/${idEdicao}`).set(dadosCard);
+                await registrarEventoTemporada('card_editado', { titulo: dadosCard.titulo, valor: dadosCard.preco });
+                alert("🔄 Card atualizado!");
+                cancelarEdicaoCard();
             } else {
-                await database.ref('novidades').push(dadosNovidade);
-                alert("🚀 Novidade lançada para todos os utilizadores!");
-                cancelarEdicaoNovidade();
+                await database.ref('cards_disponiveis').push(dadosCard);
+                await registrarEventoTemporada('card_criado', { titulo: dadosCard.titulo, valor: dadosCard.preco });
+                alert("🎯 Novo Card criado!");
+                cancelarEdicaoCard();
             }
-        } catch (err) { alert("Erro: " + err.message); }
+        } catch (error) { alert("Erro: " + error.message); }
     });
 }
 
-function ouvirNovidadesAdmin() {
-    const lista = document.getElementById('lista-novidades-admin');
-    if (!lista) return;
-
-    escutar('novidades', 'value', snapshot => {
-        const data = snapshot.val() || {};
-        lista.innerHTML = "";
-        const keys = Object.keys(data);
-        if (keys.length === 0) {
-            lista.innerHTML = `<p class="vazio-lista">Nenhuma novidade cadastrada.</p>`;
-            return;
-        }
-
-        keys.sort((a, b) => (data[b].timestamp || 0) - (data[a].timestamp || 0));
-        keys.forEach(id => {
-            const n = data[id];
+function ouvirCardsGlobaisAdmin() {
+    if (!listaCardsCriados) return;
+    escutar('cards_disponiveis', 'value', snapshot => {
+        cacheCardsAdmin = snapshot.val() || {};
+        listaCardsCriados.innerHTML = "";
+        const cards = snapshot.val();
+        if (!cards) { listaCardsCriados.innerHTML = `<p class="vazio-lista">Nenhum card cadastrado.</p>`; return; }
+        Object.keys(cards).forEach(id => {
             const div = document.createElement('div');
             div.className = 'user-item';
-            div.style.borderLeft = "3px solid #ffcc00";
+            div.style.borderLeft = "3px solid #00ff66";
             div.innerHTML = `
-                <div>
-                    <h4 style="margin:0; color:#fff;">${escapar(n.titulo)}</h4>
-                    <p style="font-size:0.75rem; color:#8899a6; margin:2px 0 0 0;">${formatarData(n.timestamp)} · ${n.permitir_comentarios !== false ? 'Comentários ativos' : 'Comentários desativados'}</p>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <img src="${escapar(cards[id].capa_url)}" style="width:40px; height:50px; object-fit:cover; border-radius:4px;">
+                    <div>
+                        <p style="margin:0; font-weight:bold; color:#fff;">${escapar(cards[id].titulo)}</p>
+                        <p style="margin:2px 0 0 0; font-size:0.75rem; color:#00ff66;">${escapar(cards[id].preco || 'R$ 10,00')}</p>
+                        <p style="margin:2px 0 0 0; font-size:0.7rem; color:#8899a6;">
+                            ${cards[id].pix_copia_cola ? "🧾 Copia e Cola" : "—"} · ${cards[id].pix_qr_base64 ? "📷 QR Code" : "sem QR"}
+                        </p>
+                    </div>
                 </div>
                 <div style="display:flex; gap:5px; margin-top:10px;">
-                    <button class="btn-visualizar-comprovante" style="margin:0; background:#24334c; border-color:#ffcc00; color:#ffcc00;" onclick="carregarNovidadeEdicao('${id}')">✏️ Editar</button>
-                    <button class="btn-visualizar-comprovante" style="margin:0; background:#3d1c1c; border-color:#ff3333; color:#ff3333;" onclick="deletarNovidade('${id}')">🗑️ Apagar</button>
+                    <button class="btn-visualizar-comprovante" style="margin:0; background:#24334c; border-color:#00ff66; color:#00ff66;" onclick="carregarCardParaEdicao('${id}')">✏️ Editar</button>
+                    <button class="btn-visualizar-comprovante" style="margin:0; background:#3d1c1c; border-color:#ff3333; color:#ff3333;" onclick="deletarCardDoSistema('${id}')">🗑️ Apagar</button>
                 </div>
             `;
-            lista.appendChild(div);
+            listaCardsCriados.appendChild(div);
         });
     });
 }
 
-function carregarNovidadeEdicao(id) {
-    database.ref(`novidades/${id}`).once('value', snapshot => {
-        const n = snapshot.val();
-        if (!n) return;
-        document.getElementById('novidade-id-edicao').value = id;
-        document.getElementById('novidade-titulo').value = n.titulo;
-        document.getElementById('novidade-descricao').value = n.descricao;
-        document.getElementById('novidade-permitir-comentarios').checked = n.permitir_comentarios !== false;
+function carregarCardParaEdicao(id) {
+    database.ref(`cards_disponiveis/${id}`).once('value', snapshot => {
+        const card = snapshot.val();
+        if (!card) return;
+        abrirAbaAdmin('cards');
+        document.getElementById('card-id-edicao').value = id;
+        document.getElementById('card-titulo').value = card.titulo;
+        document.getElementById('card-capa').value = card.capa_url;
+        document.getElementById('card-descricao').value = card.descricao;
+        document.getElementById('card-preco').value = card.preco || "";
+        document.getElementById('card-pix').value = card.pix || "";
+        document.getElementById('card-pix-copia-cola').value = card.pix_copia_cola || "";
+        document.getElementById('card-senha-patch').value = card.senha_patch || "";
+
+        qrCodeBase64Temp = card.pix_qr_base64 || "";
+        if (previewQrCard) previewQrCard.src = qrCodeBase64Temp;
+        if (statusQrCard) statusQrCard.innerText = qrCodeBase64Temp ? "QR Code carregado deste card." : "Nenhuma imagem carregada.";
 
         for (let i = 1; i <= 4; i++) {
-            document.getElementById(`nov-btn-txt-${i}`).value = "";
-            document.getElementById(`nov-btn-url-${i}`).value = "";
+            document.getElementById(`btn-txt-${i}`).value = "";
+            document.getElementById(`btn-url-${i}`).value = "";
         }
-        if (n.botoes) {
-            n.botoes.forEach((btn, idx) => {
-                if (idx < 4) {
-                    document.getElementById(`nov-btn-txt-${idx + 1}`).value = btn.texto;
-                    document.getElementById(`nov-btn-url-${idx + 1}`).value = btn.url;
-                }
+        if (card.botoes) {
+            card.botoes.forEach((btn, index) => {
+                if (index > 3) return;
+                document.getElementById(`btn-txt-${index + 1}`).value = btn.texto;
+                document.getElementById(`btn-url-${index + 1}`).value = btn.url;
             });
         }
-
-        document.getElementById('titulo-form-novidade').innerText = "✏️ Editando Novidade";
-        document.getElementById('btn-cancelar-edicao-novidade').style.display = "block";
-        document.getElementById('btn-salvar-novidade').innerText = "ATUALIZAR NOVIDADE";
+        document.getElementById('titulo-form-card').innerText = "✏️ Editando Card";
+        document.getElementById('btn-cancelar-edicao').style.display = "block";
+        document.getElementById('btn-salvar-card').innerText = "ATUALIZAR CARD";
     });
 }
 
-function cancelarEdicaoNovidade() {
-    document.getElementById('novidade-id-edicao').value = "";
-    if (formCriarNovidade) formCriarNovidade.reset();
-    document.getElementById('titulo-form-novidade').innerText = "Publicar Nova Novidade";
-    document.getElementById('btn-cancelar-edicao-novidade').style.display = "none";
-    document.getElementById('btn-salvar-novidade').innerText = "PUBLICAR NOVIDADE";
+function cancelarEdicaoCard() {
+    const hiddenId = document.getElementById('card-id-edicao');
+    if (hiddenId) hiddenId.value = "";
+    if (formCriarCard) formCriarCard.reset();
+    qrCodeBase64Temp = "";
+    if (previewQrCard) previewQrCard.src = "";
+    if (statusQrCard) statusQrCard.innerText = "Nenhuma imagem carregada.";
+    document.getElementById('titulo-form-card').innerText = "Criar Novo Card de Jogo";
+    document.getElementById('btn-cancelar-edicao').style.display = "none";
+    document.getElementById('btn-salvar-card').innerText = "SALVAR CARD";
 }
-const btnCancelarEdicaoNovidade = document.getElementById('btn-cancelar-edicao-novidade');
-if (btnCancelarEdicaoNovidade) btnCancelarEdicaoNovidade.addEventListener('click', cancelarEdicaoNovidade);
+const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
+if (btnCancelarEdicao) btnCancelarEdicao.addEventListener('click', cancelarEdicaoCard);
 
-function deletarNovidade(id) {
-    if (confirm("⚠️ Deseja eliminar esta novidade permanentemente?")) {
-        database.ref(`novidades/${id}`).remove();
+async function deletarCardDoSistema(id) {
+    if (confirm("⚠️ Deseja apagar este card?")) {
+        await database.ref(`cards_disponiveis/${id}`).remove();
+        alert("Card excluído.");
     }
 }
 
-// ==========================================================================
-// MÓDULO DE GESTÃO DE TEMPORADAS MENSAIS (ADMIN)
-// ==========================================================================
-const btnExecutarEncerramentoTemporada = document.getElementById('btn-executar-encerramento-temporada');
-if (btnExecutarEncerramentoTemporada) {
-    btnExecutarEncerramentoTemporada.addEventListener('click', async () => {
-        const nomeTemp = document.getElementById('input-nome-temporada-encerramento').value.trim();
-        if (!nomeTemp) return alert("Por favor, informe um nome ou período para identificar a temporada!");
-
-        if (!confirm(`⚠️ ATENÇÃO: Deseja encerrar a temporada "${nomeTemp}"?\n\nIsso irá arquivar os relatórios, sugestões e limpar pedidos aprovados dos utilizadores para abrir uma nova temporada.`)) return;
-
-        try {
-            const metricas = { faturamento: 0, patchesVendidos: 0, totalUsuarios: Object.keys(cacheUsuariosAdmin).length, vendasPorPatch: {} };
-            const snapshotSugestoes = await database.ref('sugestoes').once('value');
-            const sugestoes = snapshotSugestoes.val() || {};
-
-            const dadosArquivar = {
-                nome: nomeTemp,
-                data_encerramento: Date.now(),
-                faturamento: metricas.faturamento,
-                patches_vendidos: metricas.patchesVendidos,
-                total_jogadores: metricas.totalUsuarios,
-                vendas_por_patch: metricas.vendasPorPatch,
-                sugestoes_recebidas: sugestoes
-            };
-
-            // Salva na coleção histórica de temporadas
-            await database.ref('historico_temporadas').push(dadosArquivar);
-
-            // Limpa pedidos e jogos do ciclo para todos os utilizadores (reinício de temporada)
-            const usuarios = cacheUsuariosAdmin || {};
-            for (const uid of Object.keys(usuarios)) {
-                if (usuarios[uid] && usuarios[uid].email !== EMAIL_ADMIN) {
-                    await database.ref(`usuarios/${uid}/pedidos`).remove();
-                    await database.ref(`usuarios/${uid}/status_cadastro`).set("cadastrado");
-                }
-            }
-
-            // Limpa caixa de sugestões ativas
-            await database.ref('sugestoes').remove();
-
-            document.getElementById('input-nome-temporada-encerramento').value = "";
-            alert(`🎉 Temporada "${nomeTemp}" encerrada e arquivada com sucesso! Uma nova temporada foi iniciada.`);
-            renderizarHistoricoTemporadas();
-        } catch (err) {
-            alert("Erro ao encerrar temporada: " + err.message);
-        }
-    });
-}
-
-function renderizarHistoricoTemporadas() {
-    const lista = document.getElementById('lista-historico-temporadas');
-    if (!lista) return;
-
-    escutar('historico_temporadas', 'value', snapshot => {
-        const data = snapshot.val() || {};
-        lista.innerHTML = "";
-        const keys = Object.keys(data);
-
-        if (keys.length === 0) {
-            lista.innerHTML = `<p class="vazio-lista">Nenhuma temporada encerrada ainda.</p>`;
-            return;
-        }
-
-        keys.sort((a, b) => (data[b].data_encerramento || 0) - (data[a].data_encerramento || 0));
-        keys.forEach(id => {
-            const t = data[id];
-            const div = document.createElement('div');
-            div.className = 'user-item';
-            div.style.borderLeft = "4px solid #00ff66";
-            div.innerHTML = `
-                <div>
-                    <h4 style="margin:0; color:#fff;">${escapar(t.nome)}</h4>
-                    <p style="font-size:0.75rem; color:#8899a6; margin:2px 0 0 0;">
-                        Encerrada em: ${formatarData(t.data_encerramento)} | Faturamento: <strong style="color:#00ff66;">${formatarMoeda(t.faturamento || 0)}</strong> | Patches: ${t.patches_vendidos || 0}
-                    </p>
-                </div>
-                <button class="btn-visualizar-comprovante" style="margin:10px 0 0 0; width:100%;" onclick="verDetalhesTemporadaHistorico('${id}')">🔍 Ver Histórico Detalhado</button>
-            `;
-            lista.appendChild(div);
+const btnExportarCards = document.getElementById('btn-exportar-cards');
+if (btnExportarCards) {
+    btnExportarCards.addEventListener('click', () => {
+        database.ref('cards_disponiveis').once('value', snapshot => {
+            const data = snapshot.val();
+            if (!data) return alert("Vazio.");
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'backup-cards.json';
+            a.click();
         });
     });
 }
 
-function verDetalhesTemporadaHistorico(id) {
-    database.ref(`historico_temporadas/${id}`).once('value', snapshot => {
-        const t = snapshot.val();
-        if (!t) return;
+// ==========================================================================
+// PAINEL ADMIN EM MODAL COM ABAS
+// ==========================================================================
+function abrirAbaAdmin(nomeAba) {
+    if (modalPainelAdmin) modalPainelAdmin.classList.add('active');
+    document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.abaAdmin === nomeAba);
+    });
+    document.querySelectorAll('.pane-admin').forEach(pane => pane.classList.remove('active'));
+    const alvo = document.getElementById('aba-admin-' + nomeAba);
+    if (alvo) alvo.classList.add('active');
 
-        document.getElementById('titulo-temporada-historico-nome').innerText = `Histórico: ${t.nome}`;
+    if (nomeAba === 'relatorios') renderizarRelatorios();
+    if (nomeAba === 'pagamentos') renderizarConferenciaPagamentos();
+    if (nomeAba === 'mensagens') popularSelectDestinatariosAdmin();
+    if (nomeAba === 'temporadas') renderizarPainelTemporadas();
+    if (nomeAba === 'novidades') renderizarNovidadesAdmin();
+}
 
-        const containerVendas = document.getElementById('conteudo-vendas-temporada-historico');
-        const vendas = t.vendas_por_patch || {};
-        const linhas = Object.keys(vendas);
-        containerVendas.innerHTML = linhas.length ? `
-            <table><thead><tr><th>Patch</th><th>Qtd</th><th>Total</th></tr></thead><tbody>
-            ${linhas.map(n => `<tr><td>${escapar(n)}</td><td>${vendas[n].qtd}</td><td>${formatarMoeda(vendas[n].total)}</td></tr>`).join("")}
-            </tbody></table>` : `<p class="vazio-lista">Sem vendas registradas nesta temporada.</p>`;
+document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => abrirAbaAdmin(btn.dataset.abaAdmin));
+});
+document.querySelectorAll('.btn-atalho-admin').forEach(btn => {
+    btn.addEventListener('click', () => abrirAbaAdmin(btn.dataset.abrirAba));
+});
+const btnAbrirPainelAdmin = document.getElementById('btn-abrir-painel-admin');
+if (btnAbrirPainelAdmin) btnAbrirPainelAdmin.addEventListener('click', () => abrirAbaAdmin('cards'));
+const btnFecharPainelAdmin = document.getElementById('btn-fechar-painel-admin');
+if (btnFecharPainelAdmin) btnFecharPainelAdmin.addEventListener('click', () => modalPainelAdmin.classList.remove('active'));
 
-        const containerSugestoes = document.getElementById('conteudo-sugestoes-temporada-historico');
-        const sugestoes = t.sugestoes_recebidas || {};
-        const sugKeys = Object.keys(sugestoes);
-        containerSugestoes.innerHTML = sugKeys.length ? sugKeys.map(sid => {
-            const s = sugestoes[sid];
-            return `
-                <div class="user-item">
-                    <p><strong>De:</strong> ${escapar(s.nome_usuario)} (${escapar(s.email_usuario)})</p>
-                    <p><strong>Assunto:</strong> ${escapar(s.assunto)}</p>
-                    <p style="color:#c0ceda; margin-top:4px;">${escapar(s.texto)}</p>
-                </div>
-            `;
-        }).join("") : `<p class="vazio-lista">Nenhuma sugestão recebida nesta temporada.</p>`;
+function iniciarAmbienteAdmin() {
+    inicializarPainelAdmin();
+    ouvirCardsGlobaisAdmin();
+    ouvirEPovoarMenuVisualAdmin();
+    ouvirSugestoesAdmin();
+    iniciarModuloTemporadas();
+    iniciarModuloNovidadesAdmin();
 
-        document.getElementById('detalhes-temporada-historico-view').style.display = "block";
+    escutar('usuarios', 'value', snapshot => {
+        cacheUsuariosAdmin = snapshot.val() || {};
+        renderizarKpisDashboard();
+        renderizarConferenciaPagamentos();
+        if (document.getElementById('aba-admin-relatorios').classList.contains('active')) renderizarRelatorios();
+        popularSelectDestinatariosAdmin();
     });
 }
 
-function fecharDetalhesTemporadaHistorico() {
-    document.getElementById('detalhes-temporada-historico-view').style.display = "none";
-}
-
-// ==========================================================================
-// OUTRAS CONFIGURAÇÕES E FORMULÁRIOS
-// ==========================================================================
-// Inicialização do Painel Admin
-function inicializarPainelAdmin() {
-    ouvirNovidadesAdmin();
-    renderizarHistoricoTemporadas();
-}
-
-// Seleção de Destinatários Admin
-function popularSelectDestinatariosAdmin() {
-    const sel = document.getElementById('select-destinatario-admin');
-    if (!sel) return;
-    sel.innerHTML = `<option value="">Selecione um utilizador...</option>`;
+// KPIs
+function calcularMetricas() {
     const usuarios = cacheUsuariosAdmin || {};
+    const cards = cacheCardsAdmin || {};
+    let totalUsuarios = 0, totalPagos = 0, pedidosPendentes = 0, patchesVendidos = 0, faturamento = 0;
+    let novos7 = 0, novos30 = 0;
+    const agora = Date.now();
+    const vendasPorPatch = {};
+
     Object.keys(usuarios).forEach(uid => {
         const u = usuarios[uid];
-        if (u && u.email !== EMAIL_ADMIN) {
-            const opt = document.createElement('option');
-            opt.value = uid;
-            opt.innerText = `${u.nome} ${u.sobrenome || ''} (${u.email})`;
-            sel.appendChild(opt);
+        if (!u || u.email === EMAIL_ADMIN) return;
+        totalUsuarios++;
+        if (u.status_cadastro === "pago") totalPagos++;
+        if (u.pedidos) pedidosPendentes += Object.keys(u.pedidos).length;
+        if (u.data_cadastro) {
+            const dias = (agora - u.data_cadastro) / 86400000;
+            if (dias <= 7) novos7++;
+            if (dias <= 30) novos30++;
         }
+        const jogos = u.jogos_liberados || {};
+        Object.keys(jogos).forEach(cardId => {
+            if (jogos[cardId] !== true) return;
+            patchesVendidos++;
+            const card = cards[cardId];
+            const valor = precoParaNumero(card && card.preco);
+            faturamento += valor;
+            const nome = card ? card.titulo : `Card removido (${cardId.slice(-6)})`;
+            if (!vendasPorPatch[nome]) vendasPorPatch[nome] = { qtd: 0, total: 0 };
+            vendasPorPatch[nome].qtd++;
+            vendasPorPatch[nome].total += valor;
+        });
+    });
+
+    return { totalUsuarios, totalPagos, pedidosPendentes, patchesVendidos, faturamento, novos7, novos30, vendasPorPatch, totalCards: Object.keys(cards).length };
+}
+
+function montarKpis(container, itens) {
+    if (!container) return;
+    container.innerHTML = itens.map(i => `
+        <div class="kpi-card ${i.classe || ''}">
+            <span>${escapar(i.rotulo)}</span>
+            <strong>${escapar(i.valor)}</strong>
+        </div>`).join("");
+}
+
+function renderizarKpisDashboard() {
+    const m = calcularMetricas();
+    montarKpis(document.getElementById('grid-kpis-dashboard'), [
+        { rotulo: "Faturamento da temporada", valor: formatarMoeda(m.faturamento) },
+        { rotulo: "Patches vendidos", valor: m.patchesVendidos },
+        { rotulo: "Comprovantes pendentes", valor: m.pedidosPendentes, classe: m.pedidosPendentes ? "alerta" : "" },
+        { rotulo: "Usuários cadastrados", valor: m.totalUsuarios },
+        { rotulo: "Novos (7 dias)", valor: m.novos7 },
+        { rotulo: "Cards no catálogo", valor: m.totalCards }
+    ]);
+}
+
+function renderizarRelatorios() {
+    const m = calcularMetricas();
+    montarKpis(document.getElementById('grid-kpis-relatorios'), [
+        { rotulo: "Faturamento", valor: formatarMoeda(m.faturamento) },
+        { rotulo: "Patches vendidos", valor: m.patchesVendidos },
+        { rotulo: "Ticket médio", valor: formatarMoeda(m.patchesVendidos ? m.faturamento / m.patchesVendidos : 0) },
+        { rotulo: "Jogadores pagantes", valor: m.totalPagos },
+        { rotulo: "Novos em 30 dias", valor: m.novos30 },
+        { rotulo: "Pendências", valor: m.pedidosPendentes, classe: m.pedidosPendentes ? "alerta" : "" }
+    ]);
+
+    const tabelaVendas = document.getElementById('tabela-vendas-patch');
+    const linhas = Object.keys(m.vendasPorPatch).sort((a, b) => m.vendasPorPatch[b].qtd - m.vendasPorPatch[a].qtd);
+    tabelaVendas.innerHTML = linhas.length ? `
+        <table><thead><tr><th>Patch</th><th>Qtd</th><th>Receita</th></tr></thead><tbody>
+        ${linhas.map(n => `<tr><td>${escapar(n)}</td><td>${m.vendasPorPatch[n].qtd}</td><td>${formatarMoeda(m.vendasPorPatch[n].total)}</td></tr>`).join("")}
+        </tbody></table>` : `<p class="vazio-lista">Nenhuma venda registrada.</p>`;
+
+    const usuarios = cacheUsuariosAdmin || {};
+    const listaUsuarios = Object.keys(usuarios)
+        .filter(uid => usuarios[uid] && usuarios[uid].email !== EMAIL_ADMIN)
+        .sort((a, b) => (usuarios[b].data_cadastro || 0) - (usuarios[a].data_cadastro || 0))
+        .slice(0, 20);
+    document.getElementById('tabela-novos-usuarios').innerHTML = listaUsuarios.length ? `
+        <table><thead><tr><th>Jogador</th><th>E-mail</th><th>Cadastro</th><th>Patches</th></tr></thead><tbody>
+        ${listaUsuarios.map(uid => {
+            const u = usuarios[uid];
+            const qtd = Object.keys(u.jogos_liberados || {}).length;
+            return `<tr><td>${escapar(u.nome + " " + (u.sobrenome || ""))}</td><td>${escapar(u.email)}</td><td>${formatarData(u.data_cadastro)}</td><td>${qtd}</td></tr>`;
+        }).join("")}
+        </tbody></table>` : `<p class="vazio-lista">Nenhum usuário cadastrado.</p>`;
+}
+
+const btnExportarRelatorio = document.getElementById('btn-exportar-relatorio');
+if (btnExportarRelatorio) {
+    btnExportarRelatorio.addEventListener('click', () => {
+        const usuarios = cacheUsuariosAdmin || {};
+        const cards = cacheCardsAdmin || {};
+        const linhas = [["Jogador", "Email", "WhatsApp", "Status", "Cadastro", "Patches", "Valor total"]];
+        Object.keys(usuarios).forEach(uid => {
+            const u = usuarios[uid];
+            if (!u || u.email === EMAIL_ADMIN) return;
+            const jogos = Object.keys(u.jogos_liberados || {});
+            const total = jogos.reduce((soma, id) => soma + precoParaNumero(cards[id] && cards[id].preco), 0);
+            const nomesJogos = jogos.map(id => (cards[id] ? cards[id].titulo : id)).join(" | ");
+            linhas.push([`${u.nome} ${u.sobrenome || ""}`, u.email, u.whatsapp || "", u.status_cadastro || "", formatarData(u.data_cadastro), nomesJogos, total.toFixed(2)]);
+        });
+        const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+        const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'relatorio-temporada.csv';
+        a.click();
+    });
+}
+
+// Conferência de pagamentos
+function renderizarConferenciaPagamentos() {
+    const lista = document.getElementById('lista-conferencia-pagamentos');
+    if (!lista) return;
+    const usuarios = cacheUsuariosAdmin || {};
+    const cards = cacheCardsAdmin || {};
+    let totalPendentes = 0, valorPendente = 0;
+    let html = "";
+
+    Object.keys(usuarios).forEach(uid => {
+        const u = usuarios[uid];
+        if (!u || u.email === EMAIL_ADMIN || !u.pedidos) return;
+        Object.keys(u.pedidos).forEach(pedidoId => {
+            const pedido = u.pedidos[pedidoId];
+            const card = cards[pedido.id_card_comprado];
+            totalPendentes++;
+            valorPendente += precoParaNumero(card && card.preco);
+            const temComprovante = pedido.comprovante_base64 && pedido.comprovante_base64.length > 10;
+            html += `
+                <div class="user-item" style="border-left:4px solid ${temComprovante ? '#ffcc00' : '#ff3333'};">
+                    <div class="user-info">
+                        <p><strong>Jogador:</strong> ${escapar(u.nome)} ${escapar(u.sobrenome || "")}</p>
+                        <p><strong>E-mail:</strong> ${escapar(u.email)}</p>
+                        <p><strong>WhatsApp:</strong> ${escapar(u.whatsapp || 'Não cadastrado')}</p>
+                        <p><strong>Patch:</strong> ${escapar(card ? card.titulo : 'Card removido')} — ${escapar(card ? (card.preco || 'R$ 10,00') : '—')}</p>
+                        <p><strong>Enviado em:</strong> ${formatarData(pedido.timestamp)}</p>
+                    </div>
+                    ${temComprovante
+                        ? `<button class="btn-visualizar-comprovante" onclick="abrirComprovantePedidoNovaAba('${uid}','${pedidoId}')">👁️ Conferir comprovante</button>`
+                        : `<p style="color:#ff3333; font-size:0.8rem;">Sem arquivo anexado.</p>`}
+                    <button class="btn-inject" onclick="marcarPagamentoValido('${uid}','${pedidoId}','${pedido.id_card_comprado}')">✅ Marcar como VÁLIDO e liberar patch</button>
+                    <button class="btn-sair" style="width:100%; margin-top:6px; background:#211212; border:1px dashed #ff3333; color:#ff5555;" onclick="marcarPagamentoInvalido('${uid}','${pedidoId}')">❌ Marcar como inválido</button>
+                </div>`;
+        });
+    });
+
+    montarKpis(document.getElementById('grid-kpis-pagamentos'), [
+        { rotulo: "Comprovantes na fila", valor: totalPendentes, classe: totalPendentes ? "alerta" : "" },
+        { rotulo: "Valor em conferência", valor: formatarMoeda(valorPendente) }
+    ]);
+    lista.innerHTML = html || `<p class="vazio-lista">Nenhum comprovante aguardando conferência. ✅</p>`;
+}
+
+async function marcarPagamentoValido(uid, pedidoId, cardId) {
+    if (!confirm("Confirmar que o comprovante é VÁLIDO e liberar o patch?")) return;
+    try {
+        const usuario = cacheUsuariosAdmin[uid] || {};
+        const card = cacheCardsAdmin[cardId];
+        await database.ref(`usuarios/${uid}/jogos_liberados/${cardId}`).set(true);
+        await database.ref(`usuarios/${uid}/status_cadastro`).set("pago");
+        await database.ref(`usuarios/${uid}/historico_pagamentos`).push({
+            id_card: cardId,
+            titulo: card ? card.titulo : cardId,
+            valor: card ? (card.preco || "") : "",
+            status: "valido",
+            validado_em: Date.now()
+        });
+        await database.ref(`usuarios/${uid}/pedidos/${pedidoId}`).remove();
+        await registrarEventoTemporada('pagamento_valido', {
+            uid: uid,
+            jogador: `${usuario.nome || ""} ${usuario.sobrenome || ""}`.trim(),
+            email: usuario.email || "",
+            whatsapp: usuario.whatsapp || "",
+            patch: card ? card.titulo : cardId,
+            valor: card ? (card.preco || "") : "",
+            descricao: "Comprovante conferido e patch liberado para o jogador."
+        });
+        await enviarMensagemInterna(uid, usuario.email || "", "Pagamento aprovado ✅",
+            `Olá ${usuario.nome || ""}, seu comprovante foi conferido e marcado como VÁLIDO. O patch "${card ? card.titulo : ''}" já está liberado na sua conta.`);
+        alert("🔥 Pagamento validado e patch liberado!");
+    } catch (error) { alert("Erro ao processar: " + error.message); }
+}
+
+async function marcarPagamentoInvalido(uid, pedidoId) {
+    const motivo = prompt("Descreva o motivo da recusa (será enviado ao jogador):", "Comprovante ilegível ou valor divergente.");
+    if (motivo === null) return;
+    try {
+        const usuario = cacheUsuariosAdmin[uid] || {};
+        await database.ref(`usuarios/${uid}/pedidos/${pedidoId}`).remove();
+        await registrarEventoTemporada('pagamento_invalido', {
+            uid: uid,
+            jogador: `${usuario.nome || ""} ${usuario.sobrenome || ""}`.trim(),
+            email: usuario.email || "",
+            whatsapp: usuario.whatsapp || "",
+            motivo: motivo
+        });
+        await enviarMensagemInterna(uid, usuario.email || "", "Comprovante recusado ❌",
+            `Seu comprovante não foi validado.\nMotivo: ${motivo}\nVocê pode reenviar um novo comprovante pela vitrine.`);
+        alert("Pedido recusado e jogador notificado.");
+    } catch (error) { alert("Erro: " + error.message); }
+}
+
+// ==========================================================================
+// LISTA CLÁSSICA DE USUÁRIOS/PEDIDOS (ABA 3)
+// ==========================================================================
+const tabSolicPendentes = document.getElementById('tab-solic-pendentes');
+const tabSolicConcluidos = document.getElementById('tab-solic-concluidos');
+const tabSolicCadastrados = document.getElementById('tab-solic-cadastrados');
+
+function trocarFiltroAdmin(filtro, botaoAtivo) {
+    filtroAdminAtual = filtro;
+    [tabSolicPendentes, tabSolicConcluidos, tabSolicCadastrados].forEach(b => b && b.classList.remove('active'));
+    if (botaoAtivo) botaoAtivo.classList.add('active');
+    document.getElementById('container-reset-pre-venda').style.display = filtro === "concluidos" ? "block" : "none";
+    inicializarPainelAdmin();
+}
+if (tabSolicPendentes) tabSolicPendentes.addEventListener('click', () => trocarFiltroAdmin("pendentes", tabSolicPendentes));
+if (tabSolicConcluidos) tabSolicConcluidos.addEventListener('click', () => trocarFiltroAdmin("concluidos", tabSolicConcluidos));
+if (tabSolicCadastrados) tabSolicCadastrados.addEventListener('click', () => trocarFiltroAdmin("cadastrados", tabSolicCadastrados));
+
+const buscaUsuariosInput = document.getElementById('busca-usuarios-admin');
+if (buscaUsuariosInput) {
+    buscaUsuariosInput.addEventListener('input', (e) => {
+        buscaUsuariosAdmin = e.target.value.trim().toLowerCase();
+        inicializarPainelAdmin();
+    });
+}
+
+function inicializarPainelAdmin() {
+    if (!listaUsuariosAdmin) return;
+    database.ref('cards_disponiveis').once('value', snapshotCards => {
+        const cacheCardsGlobais = snapshotCards.val() || {};
+        cacheCardsAdmin = cacheCardsGlobais;
+
+        database.ref('usuarios').once('value', snapshot => {
+            listaUsuariosAdmin.innerHTML = "";
+            const users = snapshot.val();
+            cacheUsuariosAdmin = users || {};
+            if (!users) { listaUsuariosAdmin.innerHTML = `<p class="vazio-lista">Nenhum usuário.</p>`; return; }
+
+            let contagemFiltrados = 0;
+
+            Object.keys(users).forEach(uid => {
+                if (users[uid].email === EMAIL_ADMIN) return;
+
+                if (buscaUsuariosAdmin) {
+                    const alvoBusca = `${users[uid].nome || ""} ${users[uid].sobrenome || ""} ${users[uid].email || ""} ${users[uid].whatsapp || ""}`.toLowerCase();
+                    if (!alvoBusca.includes(buscaUsuariosAdmin)) return;
+                }
+
+                const status = users[uid].status_cadastro || 'pendente_pagamento';
+                const temPedidos = users[uid].pedidos && Object.keys(users[uid].pedidos).length > 0;
+
+                if (filtroAdminAtual === "pendentes" && !temPedidos) return;
+                if (filtroAdminAtual === "concluidos" && status !== "pago") return;
+                if (filtroAdminAtual === "cadastrados" && status !== "cliente_cadastrado" && status !== "solicitou_exclusao") return;
+
+                let listaJogosAtivosHtml = "";
+                const jogos = users[uid].jogos_liberados || {};
+                const keysJogos = Object.keys(jogos);
+                if (keysJogos.length === 0) {
+                    listaJogosAtivosHtml = "<li style='color:#ff3333;'>Nenhum card ativo</li>";
+                } else {
+                    keysJogos.forEach(gameId => {
+                        const tituloJogo = cacheCardsGlobais[gameId] ? cacheCardsGlobais[gameId].titulo : `ID: ${gameId.slice(-6)}`;
+                        listaJogosAtivosHtml += `<li style="display:flex; justify-content:space-between; align-items:center; background:#141d26; padding:5px; margin:3px 0; border-radius:4px; font-size:0.8rem;"><span>🎮 ${escapar(tituloJogo)}</span><button onclick="removerAcessoJogo('${uid}', '${gameId}')" style="background:none; border:none; color:#ff3333; cursor:pointer;">[Remover]</button></li>`;
+                    });
+                }
+
+                const estiloSelect = `style="width:100%; height:40px; background:#1c2434; border:1px solid #242f41; border-radius:4px; color:#fff; padding:0 10px; margin-bottom:10px; font-size:0.85rem;"`;
+
+                if (filtroAdminAtual === "pendentes") {
+                    Object.keys(users[uid].pedidos).forEach(pedidoId => {
+                        contagemFiltrados++;
+                        const pedido = users[uid].pedidos[pedidoId];
+                        const idCardComprado = pedido.id_card_comprado;
+                        const dadosCard = cacheCardsGlobais[idCardComprado];
+
+                        const userBox = document.createElement('div');
+                        userBox.className = 'user-item';
+                        userBox.style.borderLeft = "4px solid #ffcc00";
+
+                        const tagJogo = dadosCard
+                            ? `<p style="background:#132219; border:1px solid #00ff66; color:#00ff66; padding:6px; border-radius:4px; font-size:0.85rem; margin-bottom:10px;">🎯 <strong>Patch Solicitado:</strong> ${escapar(dadosCard.titulo)} (${escapar(dadosCard.preco || 'R$ 10,00')})</p>`
+                            : `<p style="background:#221313; border:1px solid #ff3333; color:#ff3333; padding:6px; border-radius:4px; font-size:0.85rem; margin-bottom:10px;">⚠️ Card do Patch removido do sistema.</p>`;
+
+                        const btnComp = pedido.comprovante_base64 && pedido.comprovante_base64.length > 10
+                            ? `<button class="btn-visualizar-comprovante" onclick="abrirComprovantePedidoNovaAba('${uid}', '${pedidoId}')">👁️ Ver Comprovante Enviado</button>`
+                            : `<p style="color:#ff3333; font-size:0.8rem; margin:5px 0;">Erro: Sem arquivo anexado.</p>`;
+
+                        userBox.innerHTML = `
+                            <div class="user-info">
+                                <p><strong>Jogador:</strong> ${escapar(users[uid].nome)} ${escapar(users[uid].sobrenome || "")}</p>
+                                <p><strong>E-mail:</strong> ${escapar(users[uid].email)}</p>
+                                <p><strong>WhatsApp:</strong> ${escapar(users[uid].whatsapp || 'Não cadastrado')}</p>
+                                ${tagJogo}
+                                ${btnComp}
+                            </div>
+                            <button class="btn-inject" onclick="marcarPagamentoValido('${uid}', '${pedidoId}', '${idCardComprado}')">✅ Confirmar Pagamento &amp; Liberar Patch</button>
+                            <button class="btn-sair" onclick="marcarPagamentoInvalido('${uid}', '${pedidoId}')" style="width:100%; font-size:0.8rem; padding:6px; margin-top:5px; background:#211212; border:1px dashed #ff3333; color:#ff5555;">❌ Recusar esta solicitação</button>
+                        `;
+                        listaUsuariosAdmin.appendChild(userBox);
+                    });
+                } else {
+                    contagemFiltrados++;
+                    const userBox = document.createElement('div');
+                    userBox.className = 'user-item';
+                    if (status === "solicitou_exclusao") userBox.style.border = "2px solid #ff3333";
+
+                    if (filtroAdminAtual === "concluidos") {
+                        userBox.innerHTML = `
+                            <div class="user-info">
+                                <p><strong>🏆 Jogador Ativo (Temporada):</strong> ${escapar(users[uid].nome)} ${escapar(users[uid].sobrenome || "")}</p>
+                                <p><strong>WhatsApp:</strong> ${escapar(users[uid].whatsapp || 'Não cadastrado')}</p>
+                                <p><strong>E-mail:</strong> ${escapar(users[uid].email)}</p>
+                                <div style="margin: 10px 0; background:#1b2430; padding:8px; border-radius:4px;">
+                                    <p style="margin:0 0 5px 0; font-size:0.8rem; color:#00ff66;">Cards Ativos na Conta:</p>
+                                    <ul style="margin:0; padding:0; list-style:none;">${listaJogosAtivosHtml}</ul>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
+                                <select id="select-game-${uid}" ${estiloSelect} style="margin:0; flex:1; height:40px;"><option value="">+ Injetar Card Extra</option></select>
+                                <button class="btn-gamer" onclick="injetarCardDiretoAdmin('${uid}')" style="margin:0; height:40px; width:45px; padding:0;">+</button>
+                            </div>
+                            <button class="btn-sair" onclick="excluirSolicitacaoEComprovante('${uid}')" style="width:100%; font-size:0.8rem; padding:6px; background:#2d1313; border:1px solid #ff3333; color:#ff3333;">📦 Mover para Cadastrados</button>
+                        `;
+                    } else {
+                        let botoes = `
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                <select id="select-game-${uid}" ${estiloSelect} style="margin:0; flex:1; height:40px;"><option value="">Injetar Novo Patch Direto</option></select>
+                                <button class="btn-gamer" onclick="injetarCardDiretoAdmin('${uid}')" style="margin:0; height:40px; width:45px; padding:0;">+</button>
+                            </div>`;
+                        if (status === "solicitou_exclusao") {
+                            botoes = `
+                                <div style="background:#281216; border:1px solid #ff3333; padding:10px; border-radius:4px; text-align:center;">
+                                    <p style="color:#ff3333; font-weight:bold; font-size:0.85rem; margin-bottom:8px;">⚠️ O USUÁRIO SOLICITOU A EXCLUSÃO DA CONTA</p>
+                                    <button class="btn-gamer" style="background:#ff3333; color:#fff; font-size:0.8rem; padding:8px;" onclick="deletarUsuarioDoBancoTotal('${uid}', '${escapar(users[uid].email)}')">🚨 APAGAR DADOS DO BANCO TOTAL</button>
+                                </div>`;
+                        }
+                        userBox.innerHTML = `
+                            <div class="user-info">
+                                <p><strong>👥 Cliente da Base Comercial:</strong> ${escapar(users[uid].nome)} ${escapar(users[uid].sobrenome || "")}</p>
+                                <p><strong>WhatsApp:</strong> ${escapar(users[uid].whatsapp || 'Não cadastrado')}</p>
+                                <p><strong>E-mail:</strong> ${escapar(users[uid].email)}</p>
+                                <p style="font-size:0.75rem; color:#8899a6;">Cadastro: ${formatarData(users[uid].data_cadastro)}</p>
+                                <div style="margin: 10px 0; background:#161c26; border:1px solid #242f41; padding:8px; border-radius:4px;">
+                                    <p style="margin:0 0 5px 0; font-size:0.8rem; color:#8899a6;">Patrimônio de Jogos do Cliente:</p>
+                                    <ul style="margin:0; padding:0; list-style:none;">${listaJogosAtivosHtml}</ul>
+                                </div>
+                            </div>
+                            ${botoes}`;
+                    }
+                    listaUsuariosAdmin.appendChild(userBox);
+                    const selectElement = document.getElementById(`select-game-${uid}`);
+                    if (selectElement) alimentarSelectComCards(selectElement, users[uid].jogos_liberados);
+                }
+            });
+
+            if (contagemFiltrados === 0) {
+                listaUsuariosAdmin.innerHTML = `<p class="vazio-lista">Nenhum jogador ou pedido nesta aba.</p>`;
+            }
+        });
+    });
+}
+
+function abrirComprovantePedidoNovaAba(uid, pedidoId) {
+    database.ref(`usuarios/${uid}/pedidos/${pedidoId}/comprovante_base64`).once('value', snapshot => {
+        const base64Data = snapshot.val();
+        if (!base64Data) return;
+        const novaAba = window.open();
+        if (!novaAba) return;
+        if (base64Data.startsWith("data:application/pdf")) {
+            novaAba.document.write(`<iframe src="${base64Data}" width="100%" height="100%" style="border:none;"></iframe>`);
+        } else {
+            novaAba.document.write(`<body style="background:#0b0e14; margin:0; display:flex; align-items:center; justify-content:center;"><img src="${base64Data}" style="max-width:100%; max-height:100vh; border:2px solid #00ff66; border-radius:8px;"></body>`);
+        }
+    });
+}
+
+async function injetarCardDiretoAdmin(uid) {
+    const selectElement = document.getElementById(`select-game-${uid}`);
+    if (!selectElement) return;
+    const selectedCardId = selectElement.value;
+    if (!selectedCardId) return alert("Selecione um patch válido para injetar.");
+    try {
+        await database.ref(`usuarios/${uid}/status_cadastro`).set("pago");
+        await database.ref(`usuarios/${uid}/jogos_liberados/${selectedCardId}`).set(true);
+        alert("🔥 Patch injetado direto!");
+        inicializarPainelAdmin();
+    } catch (error) { alert("Erro: " + error.message); }
+}
+
+async function removerAcessoJogo(uid, gameId) {
+    if (confirm("Deseja remover o acesso deste card da conta do jogador?")) {
+        await database.ref(`usuarios/${uid}/jogos_liberados/${gameId}`).remove();
+        alert("Acesso removido!");
+        inicializarPainelAdmin();
+    }
+}
+
+async function excluirSolicitacaoEComprovante(uid) {
+    if (confirm("Deseja arquivar e mover este cliente para a aba de 'Clientes Cadastrados'?")) {
+        try {
+            await database.ref(`usuarios/${uid}/pedidos`).remove();
+            await database.ref(`usuarios/${uid}/status_cadastro`).set("cliente_cadastrado");
+            alert("Movido com sucesso para a lista de cadastrados!");
+            inicializarPainelAdmin();
+        } catch (error) { alert("Erro: " + error.message); }
+    }
+}
+
+async function deletarUsuarioDoBancoTotal(uid, email) {
+    if (confirm(`🚨 ALERTA CRÍTICO:\nDeseja deletar totalmente a conta e registros de ${email}?`)) {
+        try {
+            await database.ref(`usuarios/${uid}`).remove();
+            await database.ref(`mensagens/${uid}`).remove();
+            alert("Conta e registros eliminados do banco de dados!");
+            inicializarPainelAdmin();
+        } catch (error) { alert("Erro: " + error.message); }
+    }
+}
+
+const btnResetGeral = document.getElementById('btn-reset-geral-temporada');
+if (btnResetGeral) {
+    btnResetGeral.addEventListener('click', async () => {
+        if (!confirm("⚠️ ATENÇÃO - FIM DA PRÉ-VENDA:\n\nDeseja arquivar todos os aprovados da temporada?")) return;
+        try {
+            btnResetGeral.innerText = "ARQUIVANDO TEMPORADA..."; btnResetGeral.disabled = true;
+            const snapshot = await database.ref('usuarios').once('value');
+            const usuarios = snapshot.val();
+            if (usuarios) {
+                const loteMudancas = {};
+                Object.keys(usuarios).forEach(uid => {
+                    if (usuarios[uid].email !== EMAIL_ADMIN && usuarios[uid].status_cadastro === "pago") {
+                        loteMudancas[`usuarios/${uid}/status_cadastro`] = "cliente_cadastrado";
+                        loteMudancas[`usuarios/${uid}/pedidos`] = null;
+                    }
+                });
+                await database.ref().update(loteMudancas);
+                alert("🗂️ Temporada encerrada e arquivada com sucesso!");
+            }
+        } catch (error) { alert("Erro no reset geral: " + error.message); }
+        finally {
+            btnResetGeral.innerText = "📦 ARQUIVAR APROVADOS DA TEMPORADA"; btnResetGeral.disabled = false;
+        }
+    });
+}
+
+// ==========================================================================
+// SUGESTÕES (CLIENTE -> ADMIN)
+// ==========================================================================
+const btnSugestaoFlutuante = document.getElementById('btn-sugestao-flutuante');
+if (btnSugestaoFlutuante) btnSugestaoFlutuante.addEventListener('click', () => modalSugestao.classList.add('active'));
+const btnFecharSugestao = document.getElementById('btn-fechar-sugestao');
+if (btnFecharSugestao) btnFecharSugestao.addEventListener('click', () => modalSugestao.classList.remove('active'));
+
+const formSugestao = document.getElementById('form-sugestao');
+if (formSugestao) {
+    formSugestao.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!usuarioLogadoUid) return;
+        const assunto = document.getElementById('sugestao-assunto').value.trim();
+        const texto = document.getElementById('sugestao-texto').value.trim();
+        if (!assunto || !texto) return alert("Preencha assunto e mensagem.");
+        try {
+            await database.ref('sugestoes').push({
+                uid: usuarioLogadoUid,
+                nome: dadosClienteAtual.nome || "",
+                sobrenome: dadosClienteAtual.sobrenome || "",
+                email: dadosClienteAtual.email || "",
+                whatsapp: dadosClienteAtual.whatsapp || "",
+                patches: Object.keys(dadosClienteAtual.jogos_liberados || {}).length,
+                assunto: assunto,
+                texto: texto,
+                status: "nova",
+                timestamp: Date.now()
+            });
+            await registrarEventoTemporada('sugestao', {
+                uid: usuarioLogadoUid,
+                jogador: `${dadosClienteAtual.nome || ""} ${dadosClienteAtual.sobrenome || ""}`.trim(),
+                email: dadosClienteAtual.email || "",
+                whatsapp: dadosClienteAtual.whatsapp || "",
+                titulo: assunto,
+                descricao: texto
+            });
+            alert("💡 Sugestão enviada ao administrador. Obrigado!");
+            formSugestao.reset();
+            modalSugestao.classList.remove('active');
+        } catch (erro) { alert("Erro ao enviar sugestão: " + erro.message); }
     });
 }
 
 function ouvirSugestoesAdmin() {
     const lista = document.getElementById('lista-sugestoes-admin');
     if (!lista) return;
-
     escutar('sugestoes', 'value', snapshot => {
-        const data = snapshot.val() || {};
-        lista.innerHTML = "";
-        const keys = Object.keys(data);
-        if (keys.length === 0) {
-            lista.innerHTML = `<p class="vazio-lista">Nenhuma sugestão pendente.</p>`;
-            return;
-        }
-
-        keys.forEach(id => {
-            const s = data[id];
-            const div = document.createElement('div');
-            div.className = 'user-item';
-            div.innerHTML = `
-                <div class="user-info">
-                    <p><strong>Jogador:</strong> ${escapar(s.nome_usuario)} (${escapar(s.email_usuario)})</p>
-                    <p><strong>WhatsApp:</strong> ${escapar(s.whatsapp_usuario || 'Não informado')}</p>
-                    <p><strong>Assunto:</strong> ${escapar(s.assunto)}</p>
-                    <p style="margin-top:6px; color:#fff;">${escapar(s.texto)}</p>
-                </div>
-                <button class="btn-sair" style="width:100%; margin-top:8px;" onclick="deletarSugestao('${id}')">Excluir Sugestão</button>
-            `;
-            lista.appendChild(div);
-        });
+        const dados = snapshot.val() || {};
+        const ids = Object.keys(dados).sort((a, b) => (dados[b].timestamp || 0) - (dados[a].timestamp || 0));
+        if (!ids.length) { lista.innerHTML = `<p class="vazio-lista">Nenhuma sugestão recebida.</p>`; return; }
+        lista.innerHTML = ids.map(id => {
+            const s = dados[id];
+            return `
+                <div class="user-item" style="border-left:4px solid ${s.status === 'lida' ? '#8899a6' : '#00ff66'};">
+                    <div class="user-info">
+                        <p><strong>💡 ${escapar(s.assunto || 'Sugestão')}</strong></p>
+                        <p style="font-size:0.75rem; color:#8899a6;">${formatarData(s.timestamp)}</p>
+                        <p><strong>De:</strong> ${escapar(s.nome)} ${escapar(s.sobrenome || "")}</p>
+                        <p><strong>E-mail:</strong> ${escapar(s.email)} · <strong>WhatsApp:</strong> ${escapar(s.whatsapp || '—')}</p>
+                        <p><strong>Patches na conta:</strong> ${escapar(s.patches != null ? s.patches : 0)}</p>
+                        <div class="corpo-email" style="margin-top:8px;">${escapar(s.texto)}</div>
+                    </div>
+                    <button class="btn-inject" onclick="responderSugestao('${id}','${s.uid}','${escapar(s.email)}')">↩️ Responder por mensagem interna</button>
+                    <button class="btn-sair" style="width:100%; margin-top:6px;" onclick="removerSugestao('${id}')">🗑️ Excluir sugestão</button>
+                </div>`;
+        }).join("");
     });
 }
 
-function deletarSugestao(id) {
-    if (confirm("Excluir esta sugestão?")) {
-        database.ref(`sugestoes/${id}`).remove();
+async function responderSugestao(idSugestao, uidDestino, emailDestino) {
+    const resposta = prompt("Escreva a resposta que o jogador receberá na caixa de mensagens:");
+    if (!resposta) return;
+    try {
+        await enviarMensagemInterna(uidDestino, emailDestino, "Resposta à sua sugestão", resposta);
+        await database.ref(`sugestoes/${idSugestao}/status`).set("lida");
+        alert("Resposta enviada ao jogador!");
+    } catch (e) { alert("Erro: " + e.message); }
+}
+
+async function removerSugestao(id) {
+    if (confirm("Excluir esta sugestão?")) await database.ref(`sugestoes/${id}`).remove();
+}
+
+// ==========================================================================
+// E-MAIL INTERNO (LOBBY DE MENSAGENS)
+// ==========================================================================
+async function enviarMensagemInterna(uidDestino, emailDestino, assunto, corpo) {
+    const remetenteUid = usuarioLogadoUid || "admin";
+    const remetenteNome = (auth.currentUser && auth.currentUser.email === EMAIL_ADMIN)
+        ? "Administração do Hub"
+        : `${dadosClienteAtual.nome || ""} ${dadosClienteAtual.sobrenome || ""}`.trim();
+    const remetenteEmail = (auth.currentUser && auth.currentUser.email) || "";
+
+    const mensagem = {
+        de_uid: remetenteUid,
+        de_nome: remetenteNome || remetenteEmail,
+        de_email: remetenteEmail,
+        para_uid: uidDestino,
+        para_email: emailDestino,
+        assunto: assunto,
+        corpo: corpo,
+        grupo: `${remetenteUid}_${Date.now()}`,
+        timestamp: Date.now()
+    };
+
+    await database.ref(`mensagens/${uidDestino}`).push({ ...mensagem, pasta: "entrada", lido: false });
+    if (remetenteUid !== uidDestino && remetenteUid !== "admin") {
+        await database.ref(`mensagens/${remetenteUid}`).push({ ...mensagem, pasta: "enviado", lido: true });
     }
 }
+
+function ouvirMensagensDoUsuario(uid) {
+    escutar(`mensagens/${uid}`, 'value', snapshot => {
+        cacheMensagensUsuario = snapshot.val() || {};
+        const naoLidas = Object.keys(cacheMensagensUsuario)
+            .filter(id => cacheMensagensUsuario[id].pasta === "entrada" && !cacheMensagensUsuario[id].lido).length;
+        const badge = document.getElementById('badge-emails-nao-lidos');
+        if (badge) {
+            badge.innerText = naoLidas;
+            badge.style.display = naoLidas > 0 ? "inline-block" : "none";
+        }
+        if (modalEmailInterno && modalEmailInterno.classList.contains('active')) renderizarListasEmail();
+    });
+}
+
+function renderizarListasEmail() {
+    const listaEntrada = document.getElementById('lista-email-entrada');
+    const listaEnviados = document.getElementById('lista-email-enviados');
+    if (!listaEntrada || !listaEnviados) return;
+
+    const ids = Object.keys(cacheMensagensUsuario).sort((a, b) =>
+        (cacheMensagensUsuario[b].timestamp || 0) - (cacheMensagensUsuario[a].timestamp || 0));
+
+    const render = (pasta) => {
+        const filtrados = ids.filter(id => cacheMensagensUsuario[id].pasta === pasta);
+        if (!filtrados.length) return `<p class="vazio-lista">Nenhuma mensagem aqui.</p>`;
+        return filtrados.map(id => {
+            const m = cacheMensagensUsuario[id];
+            const pessoa = pasta === "entrada" ? m.de_nome || m.de_email : (m.para_email || "destinatário");
+            return `
+                <div class="item-email ${(!m.lido && pasta === 'entrada') ? 'nao-lido' : ''}">
+                    <div onclick="abrirMensagemInterna('${id}')">
+                        <h5>${escapar(m.assunto || '(sem assunto)')} ${m.editado ? '<span class="tag-editada">(editada)</span>' : ''}</h5>
+                        <p class="meta-email">${pasta === 'entrada' ? 'De' : 'Para'}: ${escapar(pessoa)} · ${formatarData(m.timestamp)}</p>
+                    </div>
+                    <div class="acoes-item-email">
+                        <button type="button" class="btn-mini-msg" onclick="abrirMensagemInterna('${id}')">👁️ Abrir</button>
+                        ${pasta === 'entrada'
+                            ? `<button type="button" class="btn-mini-msg" onclick="alternarLidoMensagem('${id}')">${m.lido ? '📩 Marcar não lida' : '✅ Marcar lida'}</button>`
+                            : `<button type="button" class="btn-mini-msg" onclick="abrirEdicaoMensagem('${id}')">✏️ Editar</button>`}
+                        <button type="button" class="btn-mini-msg perigo" onclick="excluirMensagemUsuario('${id}')">🗑️ Excluir</button>
+                    </div>
+                </div>`;
+        }).join("");
+    };
+
+    listaEntrada.innerHTML = render("entrada");
+    listaEnviados.innerHTML = render("enviado");
+}
+
+function trocarAbaEmail(nome) {
+    document.querySelectorAll('[data-aba-email]').forEach(b => b.classList.toggle('active', b.dataset.abaEmail === nome));
+    document.querySelectorAll('.pane-email').forEach(p => p.classList.remove('active'));
+    const alvo = document.getElementById('aba-email-' + nome);
+    if (alvo) alvo.classList.add('active');
+    document.getElementById('leitor-email').style.display = "none";
+}
+document.querySelectorAll('[data-aba-email]').forEach(btn => {
+    btn.addEventListener('click', () => trocarAbaEmail(btn.dataset.abaEmail));
+});
+
+let mensagemAbertaId = null;
+function abrirMensagemInterna(id) {
+    const m = cacheMensagensUsuario[id];
+    if (!m) return;
+    mensagemAbertaId = id;
+    document.querySelectorAll('.pane-email').forEach(p => p.classList.remove('active'));
+    const leitor = document.getElementById('leitor-email');
+    leitor.style.display = "block";
+    document.getElementById('leitor-email-assunto').innerText = m.assunto || "(sem assunto)";
+    document.getElementById('leitor-email-meta').innerText =
+        `${m.pasta === 'entrada' ? 'De' : 'Para'}: ${m.pasta === 'entrada' ? (m.de_nome || m.de_email) : m.para_email} · ${formatarData(m.timestamp)}`;
+    document.getElementById('leitor-email-corpo').innerText = m.corpo || "";
+
+    const formEditar = document.getElementById('form-editar-mensagem');
+    if (formEditar) formEditar.style.display = "none";
+    const btnEditar = document.getElementById('btn-editar-email');
+    if (btnEditar) btnEditar.style.display = (m.pasta === 'enviado') ? "inline-block" : "none";
+    const btnNaoLido = document.getElementById('btn-marcar-nao-lido-email');
+    if (btnNaoLido) btnNaoLido.style.display = (m.pasta === 'entrada') ? "inline-block" : "none";
+
+    if (m.pasta === "entrada" && !m.lido && usuarioLogadoUid) {
+        database.ref(`mensagens/${usuarioLogadoUid}/${id}/lido`).set(true);
+    }
+}
+
+// ==========================================================================
+// GERENCIAMENTO DAS MENSAGENS DO PRÓPRIO USUÁRIO
+// ==========================================================================
+function caminhoMinhaMensagem(id) {
+    return `mensagens/${usuarioLogadoUid}/${id}`;
+}
+
+async function excluirMensagemUsuario(id) {
+    if (!usuarioLogadoUid || !cacheMensagensUsuario[id]) return;
+    if (!confirm("Excluir esta mensagem da sua caixa? Esta ação não pode ser desfeita.")) return;
+    try {
+        await database.ref(caminhoMinhaMensagem(id)).remove();
+        if (mensagemAbertaId === id) {
+            mensagemAbertaId = null;
+            trocarAbaEmail('entrada');
+        }
+        renderizarListasEmail();
+    } catch (erro) { alert("Erro ao excluir mensagem: " + erro.message); }
+}
+
+async function alternarLidoMensagem(id) {
+    const m = cacheMensagensUsuario[id];
+    if (!usuarioLogadoUid || !m) return;
+    try {
+        await database.ref(`${caminhoMinhaMensagem(id)}/lido`).set(!m.lido);
+        renderizarListasEmail();
+    } catch (erro) { alert("Erro ao atualizar mensagem: " + erro.message); }
+}
+
+async function marcarTodasComoLidas() {
+    if (!usuarioLogadoUid) return;
+    const atualizacoes = {};
+    Object.keys(cacheMensagensUsuario).forEach(id => {
+        const m = cacheMensagensUsuario[id];
+        if (m.pasta === 'entrada' && !m.lido) atualizacoes[`${id}/lido`] = true;
+    });
+    if (!Object.keys(atualizacoes).length) return alert("Nenhuma mensagem não lida.");
+    try {
+        await database.ref(`mensagens/${usuarioLogadoUid}`).update(atualizacoes);
+        renderizarListasEmail();
+    } catch (erro) { alert("Erro: " + erro.message); }
+}
+
+async function limparPastaMensagens(pasta) {
+    if (!usuarioLogadoUid) return;
+    const ids = Object.keys(cacheMensagensUsuario).filter(id => cacheMensagensUsuario[id].pasta === pasta);
+    if (!ids.length) return alert("Nenhuma mensagem nesta pasta.");
+    if (!confirm(`Excluir ${ids.length} mensagem(ns) da pasta ${pasta === 'entrada' ? 'Entrada' : 'Enviados'}?`)) return;
+    const atualizacoes = {};
+    ids.forEach(id => { atualizacoes[id] = null; });
+    try {
+        await database.ref(`mensagens/${usuarioLogadoUid}`).update(atualizacoes);
+        mensagemAbertaId = null;
+        trocarAbaEmail(pasta === 'entrada' ? 'entrada' : 'enviados');
+        renderizarListasEmail();
+    } catch (erro) { alert("Erro ao limpar pasta: " + erro.message); }
+}
+
+function abrirEdicaoMensagem(id) {
+    const m = cacheMensagensUsuario[id];
+    if (!m) return;
+    if (m.pasta !== 'enviado') return alert("Você só pode editar mensagens que enviou.");
+    abrirMensagemInterna(id);
+    const form = document.getElementById('form-editar-mensagem');
+    if (!form) return;
+    document.getElementById('editar-msg-assunto').value = m.assunto || "";
+    document.getElementById('editar-msg-corpo').value = m.corpo || "";
+    form.style.display = "block";
+    document.getElementById('editar-msg-assunto').focus();
+}
+
+const btnEditarEmail = document.getElementById('btn-editar-email');
+if (btnEditarEmail) btnEditarEmail.addEventListener('click', () => { if (mensagemAbertaId) abrirEdicaoMensagem(mensagemAbertaId); });
+
+const btnExcluirEmail = document.getElementById('btn-excluir-email');
+if (btnExcluirEmail) btnExcluirEmail.addEventListener('click', () => { if (mensagemAbertaId) excluirMensagemUsuario(mensagemAbertaId); });
+
+const btnMarcarNaoLido = document.getElementById('btn-marcar-nao-lido-email');
+if (btnMarcarNaoLido) {
+    btnMarcarNaoLido.addEventListener('click', async () => {
+        if (!mensagemAbertaId || !usuarioLogadoUid) return;
+        try {
+            await database.ref(`${caminhoMinhaMensagem(mensagemAbertaId)}/lido`).set(false);
+            mensagemAbertaId = null;
+            trocarAbaEmail('entrada');
+            renderizarListasEmail();
+        } catch (erro) { alert("Erro: " + erro.message); }
+    });
+}
+
+const btnCancelarEdicaoMsg = document.getElementById('btn-cancelar-edicao-msg');
+if (btnCancelarEdicaoMsg) {
+    btnCancelarEdicaoMsg.addEventListener('click', () => {
+        document.getElementById('form-editar-mensagem').style.display = "none";
+    });
+}
+
+const formEditarMensagem = document.getElementById('form-editar-mensagem');
+if (formEditarMensagem) {
+    formEditarMensagem.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!mensagemAbertaId || !usuarioLogadoUid) return;
+        const assunto = document.getElementById('editar-msg-assunto').value.trim();
+        const corpo = document.getElementById('editar-msg-corpo').value.trim();
+        if (!assunto || !corpo) return alert("Preencha assunto e mensagem.");
+        try {
+            await database.ref(caminhoMinhaMensagem(mensagemAbertaId)).update({
+                assunto: assunto,
+                corpo: corpo,
+                editado: true,
+                editado_em: Date.now()
+            });
+            const idAtual = mensagemAbertaId;
+            cacheMensagensUsuario[idAtual] = { ...cacheMensagensUsuario[idAtual], assunto, corpo, editado: true };
+            formEditarMensagem.style.display = "none";
+            abrirMensagemInterna(idAtual);
+            renderizarListasEmail();
+            alert("✅ Mensagem atualizada na sua cópia.");
+        } catch (erro) { alert("Erro ao editar mensagem: " + erro.message); }
+    });
+}
+
+const btnVoltarListaEmail = document.getElementById('btn-voltar-lista-email');
+if (btnVoltarListaEmail) btnVoltarListaEmail.addEventListener('click', () => trocarAbaEmail('entrada'));
+
+const btnResponderEmail = document.getElementById('btn-responder-email');
+if (btnResponderEmail) {
+    btnResponderEmail.addEventListener('click', () => {
+        const m = cacheMensagensUsuario[mensagemAbertaId];
+        if (!m) return;
+        trocarAbaEmail('novo');
+        const select = document.getElementById('select-destinatario-email');
+        const destino = m.pasta === 'entrada' ? m.de_uid : m.para_uid;
+        if (select) select.value = destino;
+        document.getElementById('input-assunto-email').value = "Re: " + (m.assunto || "");
+        document.getElementById('input-corpo-email').focus();
+    });
+}
+
+function popularSelectDestinatarios(selectId, incluirAdmin = true) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    database.ref('usuarios').once('value', snapshot => {
+        const usuarios = snapshot.val() || {};
+        cacheUsuariosDiretorio = usuarios;
+        const opcoes = [];
+        Object.keys(usuarios).forEach(uid => {
+            const u = usuarios[uid];
+            if (!u || uid === usuarioLogadoUid) return;
+            if (u.email === EMAIL_ADMIN) {
+                if (incluirAdmin) opcoes.unshift(`<option value="${uid}">🛡️ Administração do Hub</option>`);
+                return;
+            }
+            opcoes.push(`<option value="${uid}">${escapar(u.nome || "")} ${escapar(u.sobrenome || "")} — ${escapar(u.email || "")}</option>`);
+        });
+        select.innerHTML = `<option value="">Selecione o destinatário</option>` + opcoes.join("");
+    });
+}
+function popularSelectDestinatariosAdmin() { popularSelectDestinatarios('select-destinatario-admin', false); }
+
+const btnAbrirEmail = document.getElementById('btn-abrir-email');
+if (btnAbrirEmail) {
+    btnAbrirEmail.addEventListener('click', () => {
+        modalEmailInterno.classList.add('active');
+        trocarAbaEmail('entrada');
+        renderizarListasEmail();
+        popularSelectDestinatarios('select-destinatario-email', true);
+    });
+}
+const btnFecharEmail = document.getElementById('btn-fechar-email');
+if (btnFecharEmail) btnFecharEmail.addEventListener('click', () => modalEmailInterno.classList.remove('active'));
+
+const formNovaMensagem = document.getElementById('form-nova-mensagem');
+if (formNovaMensagem) {
+    formNovaMensagem.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const uidDestino = document.getElementById('select-destinatario-email').value;
+        const assunto = document.getElementById('input-assunto-email').value.trim();
+        const corpo = document.getElementById('input-corpo-email').value.trim();
+        if (!uidDestino || !assunto || !corpo) return alert("Preencha destinatário, assunto e mensagem.");
+        try {
+            const destinatario = cacheUsuariosDiretorio[uidDestino] || {};
+            await enviarMensagemInterna(uidDestino, destinatario.email || "", assunto, corpo);
+            alert("✉️ Mensagem enviada!");
+            formNovaMensagem.reset();
+            trocarAbaEmail('enviados');
+            renderizarListasEmail();
+        } catch (erro) { alert("Erro ao enviar: " + erro.message); }
+    });
+}
+
+const formMsgAdmin = document.getElementById('form-msg-admin');
+if (formMsgAdmin) {
+    formMsgAdmin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const uidDestino = document.getElementById('select-destinatario-admin').value;
+        const assunto = document.getElementById('assunto-msg-admin').value.trim();
+        const corpo = document.getElementById('corpo-msg-admin').value.trim();
+        if (!uidDestino || !assunto || !corpo) return alert("Preencha todos os campos.");
+        try {
+            const destinatario = (cacheUsuariosAdmin[uidDestino] || {});
+            await enviarMensagemInterna(uidDestino, destinatario.email || "", assunto, corpo);
+            alert("✉️ Mensagem enviada ao jogador!");
+            formMsgAdmin.reset();
+        } catch (erro) { alert("Erro: " + erro.message); }
+    });
+}
+
+// ==========================================================================
+// LOGIN / CADASTRO / PERFIL
+// ==========================================================================
+async function deslogar() {
+    if (!confirm("Deseja realmente sair do sistema?")) return;
+    try { await auth.signOut(); } catch (e) { /* ignore */ }
+    restaurarTelaLoginDoZero();
+}
+
+function verificarArquivo(arquivo) {
+    if (!arquivo || !fileInfoElement) return;
+    if (arquivo.size > 4 * 1024 * 1024) {
+        alert("⚠️ Arquivo muito grande! O limite máximo permitido é de 4MB.");
+        if (inputComprovanteElement) inputComprovanteElement.value = "";
+        comprovanteBase64Global = "";
+        fileInfoElement.innerText = "Nenhum arquivo selecionado";
+        return;
+    }
+    fileInfoElement.innerText = `Carregando: ${arquivo.name} (${(arquivo.size / 1024).toFixed(1)} KB)...`;
+    const leitor = new FileReader();
+    leitor.onload = (evento) => {
+        comprovanteBase64Global = evento.target.result;
+        fileInfoElement.innerText = `✅ Pronto: ${arquivo.name}`;
+    };
+    leitor.onerror = () => {
+        alert("Erro ao ler o arquivo comprovante.");
+        fileInfoElement.innerText = "Erro no carregamento do arquivo";
+        comprovanteBase64Global = "";
+    };
+    leitor.readAsDataURL(arquivo);
+}
+
+
+// ==========================================================================
+// ANIMAÇÃO DE CARREGAMENTO (LOGIN / CADASTRO)
+// ==========================================================================
+function definirCarregandoBotao(botao, ativo) {
+    if (!botao) return;
+    if (ativo) {
+        if (!botao.dataset.textoOriginal) botao.dataset.textoOriginal = botao.innerText;
+        botao.classList.add('carregando');
+        botao.disabled = true;
+    } else {
+        botao.classList.remove('carregando');
+        botao.disabled = false;
+        if (botao.dataset.textoOriginal) botao.innerText = botao.dataset.textoOriginal;
+    }
+}
+
+function definirCarregandoAuth(ativo, mensagem) {
+    const overlay = document.getElementById('overlay-auth-carregando');
+    const texto = document.getElementById('texto-auth-carregando');
+    if (texto && mensagem) texto.innerText = mensagem;
+    if (overlay) overlay.classList.toggle('active', !!ativo);
+}
+
+const formLoginElement = document.getElementById('form-login');
+if (formLoginElement) {
+    formLoginElement.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const senha = document.getElementById('login-senha').value;
+        const btnLogar = document.getElementById('btn-logar');
+        if (!email || !senha) { alert("Preencha todos os campos."); return; }
+        definirCarregandoBotao(btnLogar, true);
+        definirCarregandoAuth(true, "CONECTANDO...");
+        try {
+            await auth.signInWithEmailAndPassword(email, senha);
+        } catch (erro) {
+            alert("Erro ao autenticar: " + erro.message);
+        } finally {
+            definirCarregandoBotao(btnLogar, false);
+            definirCarregandoAuth(false);
+        }
+    });
+}
+
+const btnEsqueciSenha = document.getElementById('btn-esqueci-senha');
+if (btnEsqueciSenha) {
+    btnEsqueciSenha.addEventListener('click', function () {
+        const emailLogin = document.getElementById('login-email').value.trim();
+        const inputRecuperarEmail = document.getElementById('recuperar-email');
+        if (inputRecuperarEmail) inputRecuperarEmail.value = emailLogin;
+        if (modalEsqueciSenha) modalEsqueciSenha.classList.add('active');
+    });
+}
+const btnFecharEsqueciSenha = document.getElementById('btn-fechar-esqueci-senha');
+if (btnFecharEsqueciSenha) btnFecharEsqueciSenha.addEventListener('click', () => modalEsqueciSenha.classList.remove('active'));
+
+const formRecuperarSenhaInterno = document.getElementById('form-recuperar-senha-interno');
+if (formRecuperarSenhaInterno) {
+    formRecuperarSenhaInterno.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const emailRedefinicao = document.getElementById('recuperar-email').value.trim();
+        const btn = formRecuperarSenhaInterno.querySelector('button[type="submit"]');
+        if (!emailRedefinicao) { alert("⚠️ Por favor, informe um e-mail válido."); return; }
+        let textoOriginal = "";
+        if (btn) { textoOriginal = btn.innerText; btn.innerText = "ENVIANDO LINK..."; btn.disabled = true; }
+        try {
+            await auth.sendPasswordResetEmail(emailRedefinicao);
+            alert("🚀 Link de redefinição enviado com sucesso!\nVerifique a sua caixa de entrada ou a pasta de spam.");
+            if (modalEsqueciSenha) modalEsqueciSenha.classList.remove('active');
+            formRecuperarSenhaInterno.reset();
+        } catch (erro) {
+            alert("Erro ao enviar redefinição: " + erro.message);
+        } finally {
+            if (btn) { btn.innerText = textoOriginal; btn.disabled = false; }
+        }
+    });
+}
+
+const formCadastroAuth = document.getElementById('form-cadastro-auth');
+if (formCadastroAuth) {
+    formCadastroAuth.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const nome = document.getElementById('cad-nome').value.trim();
+        const sobrenome = document.getElementById('cad-sobrenome').value.trim();
+        const whatsapp = document.getElementById('cad-whatsapp').value.trim();
+        const email = document.getElementById('cad-email').value.trim();
+        const senha = document.getElementById('cad-senha').value;
+        const btnCadastrar = formCadastroAuth.querySelector('button[type="submit"]');
+
+        if (!nome || !sobrenome || !whatsapp || !email || !senha) { alert("⚠️ Preencha todos os campos do formulário."); return; }
+        if (!validarProvedorEmail(email)) { alert("⚠️ Por favor, utilize um provedor de e-mail válido (Ex: Gmail, Hotmail, Outlook, Yahoo)."); return; }
+        if (senha.length < 6) { alert("⚠️ A senha deve conter no mínimo 6 dígitos."); return; }
+
+        definirCarregandoBotao(btnCadastrar, true);
+        definirCarregandoAuth(true, "CRIANDO SUA CONTA...");
+
+        try {
+            const credencial = await auth.createUserWithEmailAndPassword(email, senha);
+            const uid = credencial.user.uid;
+            await database.ref(`usuarios/${uid}`).set({
+                nome, sobrenome, email, whatsapp,
+                status_cadastro: "cliente_cadastrado",
+                data_cadastro: Date.now(),
+                avatar_base64: "",
+                jogos_liberados: {},
+                pedidos: {}
+            });
+            await registrarEventoTemporada('cadastro', {
+                uid: uid,
+                jogador: `${nome} ${sobrenome}`,
+                email: email,
+                whatsapp: whatsapp,
+                descricao: "Novo jogador cadastrado na temporada."
+            });
+            alert("🎯 Conta criada com sucesso! Seja bem-vindo ao HUB.");
+            formCadastroAuth.reset();
+        } catch (erro) {
+            alert("Erro ao criar conta: " + erro.message);
+        } finally {
+            definirCarregandoBotao(btnCadastrar, false);
+            definirCarregandoAuth(false);
+        }
+    });
+}
+
+// PERFIL COM AVATAR
+const btnAbrirPerfil = document.getElementById('btn-abrir-perfil');
+if (btnAbrirPerfil) {
+    btnAbrirPerfil.addEventListener('click', function () {
+        if (!modalEditarPerfil) return;
+        document.getElementById('perf-email').value = dadosClienteAtual.email || "";
+        document.getElementById('perf-nome').value = dadosClienteAtual.nome || "";
+        document.getElementById('perf-sobrenome').value = dadosClienteAtual.sobrenome || "";
+        document.getElementById('perf-whatsapp').value = dadosClienteAtual.whatsapp || "";
+        avatarBase64Temp = null;
+        const preview = document.getElementById('preview-avatar-perfil');
+        if (preview) preview.src = dadosClienteAtual.avatar_base64 || "";
+        modalEditarPerfil.classList.add('active');
+    });
+}
+const btnFecharPerfil = document.getElementById('btn-fechar-perfil');
+if (btnFecharPerfil) btnFecharPerfil.addEventListener('click', () => modalEditarPerfil.classList.remove('active'));
+
+const btnEscolherAvatar = document.getElementById('btn-escolher-avatar');
+const inputAvatarPerfil = document.getElementById('input-avatar-perfil');
+if (btnEscolherAvatar && inputAvatarPerfil) {
+    btnEscolherAvatar.addEventListener('click', () => inputAvatarPerfil.click());
+    inputAvatarPerfil.addEventListener('change', async (e) => {
+        const arquivo = e.target.files && e.target.files[0];
+        if (!arquivo) return;
+        try {
+            avatarBase64Temp = await converterImagemParaBase64(arquivo, 320, true);
+            document.getElementById('preview-avatar-perfil').src = avatarBase64Temp;
+        } catch (erro) { alert(erro.message); }
+    });
+}
+const btnRemoverAvatar = document.getElementById('btn-remover-avatar');
+if (btnRemoverAvatar) {
+    btnRemoverAvatar.addEventListener('click', () => {
+        avatarBase64Temp = "";
+        document.getElementById('preview-avatar-perfil').src = "";
+    });
+}
+
+const formEditarPerfilCliente = document.getElementById('form-editar-perfil-cliente');
+if (formEditarPerfilCliente) {
+    formEditarPerfilCliente.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!usuarioLogadoUid) return;
+        const atualizacao = {
+            nome: document.getElementById('perf-nome').value.trim(),
+            sobrenome: document.getElementById('perf-sobrenome').value.trim(),
+            whatsapp: document.getElementById('perf-whatsapp').value.trim()
+        };
+        if (avatarBase64Temp !== null) atualizacao.avatar_base64 = avatarBase64Temp;
+        try {
+            await database.ref(`usuarios/${usuarioLogadoUid}`).update(atualizacao);
+            alert("⚙️ Perfil atualizado com sucesso!");
+            avatarBase64Temp = null;
+            if (modalEditarPerfil) modalEditarPerfil.classList.remove('active');
+        } catch (error) { alert("Erro ao atualizar perfil: " + error.message); }
+    });
+}
+
+const btnSolicitarExclusaoConta = document.getElementById('btn-solicitar-exclusao-conta');
+if (btnSolicitarExclusaoConta) {
+    btnSolicitarExclusaoConta.addEventListener('click', async function () {
+        if (!usuarioLogadoUid) return;
+        if (confirm("🚨 ATENÇÃO CRÍTICA:\nDeseja realmente solicitar o encerramento dos seus dados? Seu acesso será suspenso imediatamente.")) {
+            try {
+                await database.ref(`usuarios/${usuarioLogadoUid}/status_cadastro`).set("solicitou_exclusao");
+                if (modalEditarPerfil) modalEditarPerfil.classList.remove('active');
+            } catch (error) { alert("Erro ao processar solicitação: " + error.message); }
+        }
+    });
+}
+
+// ==========================================================================
+// COMPROVANTE / CHECKOUT
+// ==========================================================================
+const btnFecharFormElement = document.getElementById('btn-fechar-form');
+if (btnFecharFormElement) btnFecharFormElement.addEventListener('click', () => modalFormEnvio.classList.remove('active'));
+
+const inputComprovanteElement = document.getElementById('comprovante');
+const dropZoneElement = document.getElementById('drop-zone');
+const fileInfoElement = document.getElementById('file-info');
+const formComprovanteElement = document.getElementById('form-comprovante');
+
+if (dropZoneElement && inputComprovanteElement) {
+    dropZoneElement.onclick = () => inputComprovanteElement.click();
+    inputComprovanteElement.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) verificarArquivo(e.target.files[0]);
+    };
+    dropZoneElement.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneElement.classList.add('hover'); });
+    dropZoneElement.addEventListener('dragleave', () => dropZoneElement.classList.remove('hover'));
+    dropZoneElement.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZoneElement.classList.remove('hover');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) verificarArquivo(e.dataTransfer.files[0]);
+    });
+}
+
+if (formComprovanteElement) {
+    formComprovanteElement.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const cardIdEscolhido = document.getElementById('id-card-escolhido-compra').value;
+        if (!cardIdEscolhido) { alert("Erro interno: Nenhum card foi selecionado para compra."); return; }
+        if (!comprovanteBase64Global || comprovanteBase64Global.length < 50) { alert("⚠️ Por favor, anexe o comprovante PIX antes de concluir."); return; }
+        if (!usuarioLogadoUid) { alert("Sua sessão expirou. Logue novamente antes de enviar."); return; }
+
+        const btnSub = document.getElementById('btn-enviar-tudo');
+        if (btnSub) { btnSub.innerText = "ENVIANDO COMPROVANTE..."; btnSub.disabled = true; }
+
+        try {
+            await database.ref(`usuarios/${usuarioLogadoUid}/pedidos`).push({
+                id_card_comprado: cardIdEscolhido,
+                comprovante_base64: comprovanteBase64Global,
+                timestamp: Date.now()
+            });
+            await database.ref(`usuarios/${usuarioLogadoUid}/status_cadastro`).set("comprovante_enviado");
+            await registrarEventoTemporada('comprovante_enviado', {
+                uid: usuarioLogadoUid,
+                jogador: `${dadosClienteAtual.nome || ""} ${dadosClienteAtual.sobrenome || ""}`.trim(),
+                email: dadosClienteAtual.email || "",
+                whatsapp: dadosClienteAtual.whatsapp || "",
+                patch: (cacheCardsAdmin[cardIdEscolhido] && cacheCardsAdmin[cardIdEscolhido].titulo) || cardIdEscolhido,
+                descricao: "Jogador enviou comprovante PIX para conferência."
+            });
+            alert("🚀 Comprovante enviado com sucesso!\nO administrador analisará este pedido para liberação.");
+            if (modalFormEnvio) modalFormEnvio.classList.remove('active');
+            formComprovanteElement.reset();
+            comprovanteBase64Global = "";
+            if (fileInfoElement) fileInfoElement.innerText = "Nenhum arquivo selecionado";
+        } catch (erro) {
+            alert("Erro de comunicação com o banco: " + erro.message);
+        } finally {
+            if (btnSub) { btnSub.innerText = "CONCLUIR INSCRIÇÃO"; btnSub.disabled = false; }
+        }
+    });
+}
+
+const btnCopiarPixPainel = document.getElementById('btn-copiar-pix-painel');
+if (btnCopiarPixPainel) {
+    btnCopiarPixPainel.addEventListener('click', () => {
+        const valor = document.getElementById('valor-chave-pix').innerText;
+        ejecutarCopiaGamerBlindada(valor, btnCopiarPixPainel);
+    });
+}
+
+document.addEventListener('contextmenu', (e) => {
+    const viewCli = document.getElementById('view-cliente');
+    if (viewCli && viewCli.classList.contains('active')) {
+        const target = e.target.closest('.game-card, .modal-content, img, #container-senha-protegida-modal');
+        if (target) { e.preventDefault(); return false; }
+    }
+});
+
+// ==========================================================================
+// MÓDULO GERENCIAL: TEMPORADAS MENSAIS (HISTÓRICO COMPLETO)
+// ==========================================================================
+const MESES_TEMPORADA = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+const ROTULOS_EVENTOS = {
+    cadastro: "👤 Novo cadastro",
+    comprovante_enviado: "📤 Comprovante enviado",
+    pagamento_valido: "✅ Pagamento aprovado",
+    pagamento_invalido: "❌ Pagamento recusado",
+    sugestao: "💡 Sugestão",
+    card_criado: "🎮 Card criado",
+    card_editado: "🔄 Card editado",
+    card_excluido: "🗑️ Card excluído",
+    acesso_manual: "🎁 Patch liberado manualmente",
+    acesso_removido: "🚫 Patch removido",
+    novidade: "📣 Novidade publicada",
+    novidade_editada: "✏️ Novidade editada",
+    novidade_excluida: "🗑️ Novidade excluída",
+    comentario: "💬 Comentário em novidade",
+    exclusao_conta: "🚨 Solicitação de exclusão de conta",
+    mensagem: "✉️ Mensagem interna",
+    encerramento: "🗓️ Encerramento da temporada"
+};
+
+let cacheTemporadas = {};
+let cacheEventosTemporadaAberta = {};
+let filtroEventosTemporada = "todos";
+let temporadaDetalheId = null;
+
+function idTemporadaDeData(ts) {
+    const d = new Date(ts || Date.now());
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function nomeTemporada(id) {
+    const partes = String(id || "").split('-');
+    const mes = Number(partes[1]);
+    return `${MESES_TEMPORADA[mes - 1] || '?'} / ${partes[0] || '?'}`;
+}
+
+function idTemporadaSeguinte(id) {
+    const partes = String(id).split('-');
+    let ano = Number(partes[0]);
+    let mes = Number(partes[1]) + 1;
+    if (mes > 12) { mes = 1; ano++; }
+    return `${ano}-${String(mes).padStart(2, '0')}`;
+}
+
+// Grava qualquer acontecimento no histórico da temporada corrente
+async function registrarEventoTemporada(tipo, dados) {
+    try {
+        const agora = Date.now();
+        const idTemp = idTemporadaDeData(agora);
+        const refInfo = database.ref(`temporadas/${idTemp}/info`);
+        const infoAtual = (await refInfo.once('value')).val();
+        if (!infoAtual) {
+            await refInfo.set({ id: idTemp, nome: nomeTemporada(idTemp), status: "aberta", aberta_em: agora, atualizado_em: agora });
+        } else {
+            await refInfo.update({ atualizado_em: agora });
+        }
+        await database.ref(`temporadas/${idTemp}/eventos`).push(Object.assign({
+            tipo: tipo,
+            rotulo: ROTULOS_EVENTOS[tipo] || tipo,
+            timestamp: agora
+        }, dados || {}));
+    } catch (erro) {
+        console.warn("Não foi possível registrar o evento da temporada:", erro && erro.message);
+    }
+}
+
+function iniciarModuloTemporadas() {
+    escutar('temporadas', 'value', snapshot => {
+        cacheTemporadas = snapshot.val() || {};
+        const idAtual = idTemporadaDeData();
+        const temp = cacheTemporadas[idAtual] || {};
+        cacheEventosTemporadaAberta = temp.eventos || {};
+        renderizarPainelTemporadas();
+        if (temporadaDetalheId) renderizarDetalheTemporada(temporadaDetalheId);
+    });
+}
+
+function linhasEventos(eventos, filtro) {
+    const ids = Object.keys(eventos || {})
+        .filter(id => filtro === "todos" || eventos[id].tipo === filtro)
+        .sort((a, b) => (eventos[b].timestamp || 0) - (eventos[a].timestamp || 0));
+    if (!ids.length) return `<p class="vazio-lista">Nenhum registro para este filtro.</p>`;
+    return `<div class="lista-eventos-temporada">${ids.map(id => {
+        const e = eventos[id];
+        const detalhes = [];
+        if (e.jogador) detalhes.push(`<strong>Jogador:</strong> ${escapar(e.jogador)}`);
+        if (e.email) detalhes.push(`<strong>E-mail:</strong> ${escapar(e.email)}`);
+        if (e.whatsapp) detalhes.push(`<strong>WhatsApp:</strong> ${escapar(e.whatsapp)}`);
+        if (e.patch) detalhes.push(`<strong>Patch:</strong> ${escapar(e.patch)}`);
+        if (e.valor) detalhes.push(`<strong>Valor:</strong> ${escapar(e.valor)}`);
+        if (e.titulo) detalhes.push(`<strong>Título:</strong> ${escapar(e.titulo)}`);
+        if (e.motivo) detalhes.push(`<strong>Motivo:</strong> ${escapar(e.motivo)}`);
+        if (e.uid) detalhes.push(`<strong>ID interno:</strong> ${escapar(e.uid)}`);
+        return `
+            <div class="evento-temporada">
+                <div class="evento-cabecalho">
+                    <span class="evento-tag">${escapar(e.rotulo || ROTULOS_EVENTOS[e.tipo] || e.tipo)}</span>
+                    <span class="evento-data">${formatarData(e.timestamp)}</span>
+                </div>
+                ${detalhes.length ? `<p class="evento-detalhe">${detalhes.join(" · ")}</p>` : ""}
+                ${e.descricao ? `<div class="corpo-email" style="margin-top:6px;">${escapar(e.descricao)}</div>` : ""}
+            </div>`;
+    }).join("")}</div>`;
+}
+
+function barraFiltrosEventos(eventos, filtroAtivo, funcaoJs) {
+    const tipos = Array.from(new Set(Object.keys(eventos || {}).map(id => eventos[id].tipo)));
+    return `<div class="tabs-scroll" style="margin:10px 0;">
+        <button type="button" class="tab-btn ${filtroAtivo === 'todos' ? 'active' : ''}" onclick="${funcaoJs}('todos')">Todos (${Object.keys(eventos || {}).length})</button>
+        ${tipos.map(t => `<button type="button" class="tab-btn ${filtroAtivo === t ? 'active' : ''}" onclick="${funcaoJs}('${t}')">${escapar(ROTULOS_EVENTOS[t] || t)}</button>`).join("")}
+    </div>`;
+}
+
+function filtrarEventosTemporadaAberta(tipo) {
+    filtroEventosTemporada = tipo;
+    renderizarPainelTemporadas();
+}
+
+function renderizarPainelTemporadas() {
+    const area = document.getElementById('area-temporada-aberta');
+    const lista = document.getElementById('lista-temporadas-historico');
+    if (!area || !lista) return;
+
+    const idAtual = idTemporadaDeData();
+    const m = calcularMetricas();
+    const eventos = cacheEventosTemporadaAberta || {};
+
+    document.getElementById('titulo-temporada-atual').innerText = `Temporada aberta: ${nomeTemporada(idAtual)}`;
+    montarKpis(document.getElementById('grid-kpis-temporada-aberta'), [
+        { rotulo: "Faturamento no mês", valor: formatarMoeda(m.faturamento) },
+        { rotulo: "Patches vendidos", valor: m.patchesVendidos },
+        { rotulo: "Registros no histórico", valor: Object.keys(eventos).length },
+        { rotulo: "Comprovantes pendentes", valor: m.pedidosPendentes, classe: m.pedidosPendentes ? "alerta" : "" },
+        { rotulo: "Jogadores cadastrados", valor: m.totalUsuarios },
+        { rotulo: "Novos no mês", valor: m.novos30 }
+    ]);
+
+    area.innerHTML = barraFiltrosEventos(eventos, filtroEventosTemporada, 'filtrarEventosTemporadaAberta') + linhasEventos(eventos, filtroEventosTemporada);
+
+    const ids = Object.keys(cacheTemporadas).sort().reverse();
+    lista.innerHTML = ids.length ? ids.map(id => {
+        const t = cacheTemporadas[id] || {};
+        const info = t.info || {};
+        const f = t.fechamento || {};
+        const qtd = Object.keys(t.eventos || {}).length;
+        const encerrada = info.status === "encerrada";
+        return `
+            <div class="user-item" style="border-left:4px solid ${encerrada ? '#8899a6' : '#00ff66'};">
+                <div class="user-info">
+                    <p><strong>🗓️ ${escapar(nomeTemporada(id))}</strong> ${encerrada ? '<span class="tag-temporada">ENCERRADA</span>' : '<span class="tag-temporada aberta">EM ANDAMENTO</span>'}</p>
+                    <p><strong>Registros:</strong> ${qtd}</p>
+                    ${encerrada ? `<p><strong>Faturamento apurado:</strong> ${escapar(formatarMoeda(f.faturamento || 0))} · <strong>Patches:</strong> ${escapar(f.patches_vendidos != null ? f.patches_vendidos : 0)}</p>
+                    <p style="font-size:0.75rem; color:#8899a6;">Encerrada em ${formatarData(f.encerrada_em)}</p>` : ""}
+                </div>
+                <button class="btn-visualizar-comprovante" onclick="abrirDetalheTemporada('${id}')">📚 Ver histórico completo</button>
+            </div>`;
+    }).join("") : `<p class="vazio-lista">Nenhuma temporada registrada ainda.</p>`;
+}
+
+function abrirDetalheTemporada(id) {
+    temporadaDetalheId = id;
+    filtroEventosDetalhe = "todos";
+    renderizarDetalheTemporada(id);
+    document.getElementById('modal-temporada-detalhe').classList.add('active');
+}
+
+let filtroEventosDetalhe = "todos";
+function filtrarEventosDetalhe(tipo) {
+    filtroEventosDetalhe = tipo;
+    renderizarDetalheTemporada(temporadaDetalheId);
+}
+
+function renderizarDetalheTemporada(id) {
+    const t = cacheTemporadas[id] || {};
+    const info = t.info || {};
+    const f = t.fechamento || {};
+    const eventos = t.eventos || {};
+    document.getElementById('titulo-temporada-detalhe').innerText = `🗓️ Temporada ${nomeTemporada(id)}`;
+
+    const kpis = info.status === "encerrada" ? [
+        { rotulo: "Faturamento", valor: formatarMoeda(f.faturamento || 0) },
+        { rotulo: "Patches vendidos", valor: f.patches_vendidos || 0 },
+        { rotulo: "Ticket médio", valor: formatarMoeda(f.ticket_medio || 0) },
+        { rotulo: "Jogadores pagantes", valor: f.jogadores_pagantes || 0 },
+        { rotulo: "Cadastros no período", valor: f.novos_usuarios || 0 },
+        { rotulo: "Registros", valor: Object.keys(eventos).length }
+    ] : [
+        { rotulo: "Status", valor: "Em andamento" },
+        { rotulo: "Registros", valor: Object.keys(eventos).length },
+        { rotulo: "Aberta em", valor: formatarData(info.aberta_em) }
+    ];
+    montarKpis(document.getElementById('grid-kpis-temporada-detalhe'), kpis);
+
+    document.getElementById('conteudo-temporada-detalhe').innerHTML =
+        barraFiltrosEventos(eventos, filtroEventosDetalhe, 'filtrarEventosDetalhe') +
+        linhasEventos(eventos, filtroEventosDetalhe);
+}
+
+function exportarHistoricoTemporada() {
+    const t = cacheTemporadas[temporadaDetalheId] || {};
+    const eventos = t.eventos || {};
+    const linhas = [["Data", "Tipo", "Jogador", "E-mail", "WhatsApp", "Patch/Título", "Valor", "Detalhe"]];
+    Object.keys(eventos)
+        .sort((a, b) => (eventos[a].timestamp || 0) - (eventos[b].timestamp || 0))
+        .forEach(id => {
+            const e = eventos[id];
+            linhas.push([formatarData(e.timestamp), ROTULOS_EVENTOS[e.tipo] || e.tipo, e.jogador || "", e.email || "", e.whatsapp || "", e.patch || e.titulo || "", e.valor || "", (e.descricao || e.motivo || "").replace(/\n/g, " ")]);
+        });
+    const csv = linhas.map(l => l.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `temporada-${temporadaDetalheId}.csv`;
+    a.click();
+}
+
+// Encerramento mensal: fotografa os números, arquiva os aprovados e abre o mês seguinte
+async function encerrarTemporadaMensal() {
+    const idAtual = idTemporadaDeData();
+    if (!confirm(`⚠️ ENCERRAMENTO DA TEMPORADA ${nomeTemporada(idAtual).toUpperCase()}\n\nOs números serão fotografados e ficarão salvos no histórico, os aprovados serão arquivados e a temporada seguinte será aberta.\n\nConfirmar encerramento?`)) return;
+    const botao = document.getElementById('btn-encerrar-temporada');
+    try {
+        if (botao) { botao.disabled = true; botao.innerText = "ENCERRANDO TEMPORADA..."; }
+        const m = calcularMetricas();
+        const agora = Date.now();
+
+        const fechamento = {
+            faturamento: m.faturamento,
+            patches_vendidos: m.patchesVendidos,
+            ticket_medio: m.patchesVendidos ? m.faturamento / m.patchesVendidos : 0,
+            jogadores_pagantes: m.totalPagos,
+            total_usuarios: m.totalUsuarios,
+            novos_usuarios: m.novos30,
+            comprovantes_pendentes: m.pedidosPendentes,
+            cards_no_catalogo: m.totalCards,
+            vendas_por_patch: m.vendasPorPatch,
+            encerrada_em: agora
+        };
+
+        await database.ref(`temporadas/${idAtual}/fechamento`).set(fechamento);
+        await database.ref(`temporadas/${idAtual}/info`).update({
+            id: idAtual, nome: nomeTemporada(idAtual), status: "encerrada", encerrada_em: agora
+        });
+
+        await registrarEventoTemporada('encerramento', {
+            titulo: `Encerramento da temporada ${nomeTemporada(idAtual)}`,
+            valor: formatarMoeda(m.faturamento),
+            descricao: `Temporada encerrada com ${m.patchesVendidos} patch(es) vendido(s), ${m.totalPagos} jogador(es) pagante(s) e faturamento de ${formatarMoeda(m.faturamento)}.`
+        });
+
+        // arquiva os aprovados do período
+        const snapshot = await database.ref('usuarios').once('value');
+        const usuarios = snapshot.val() || {};
+        const lote = {};
+        Object.keys(usuarios).forEach(uid => {
+            if (usuarios[uid].email !== EMAIL_ADMIN && usuarios[uid].status_cadastro === "pago") {
+                lote[`usuarios/${uid}/status_cadastro`] = "cliente_cadastrado";
+                lote[`usuarios/${uid}/pedidos`] = null;
+            }
+        });
+        if (Object.keys(lote).length) await database.ref().update(lote);
+
+        const proxima = idTemporadaSeguinte(idAtual);
+        await database.ref(`temporadas/${proxima}/info`).update({
+            id: proxima, nome: nomeTemporada(proxima), status: "aberta", aberta_em: agora
+        });
+        await database.ref('temporada_atual').set({ id: proxima, aberta_em: agora });
+
+        alert(`🗂️ Temporada ${nomeTemporada(idAtual)} encerrada e arquivada!\nTudo o que aconteceu continua disponível no menu Temporadas.`);
+    } catch (erro) {
+        alert("Erro ao encerrar a temporada: " + erro.message);
+    } finally {
+        if (botao) { botao.disabled = false; botao.innerText = "🗓️ ENCERRAR TEMPORADA DO MÊS"; }
+    }
+}
+
+// ==========================================================================
+// MÓDULO NOVIDADES! (ADMIN PUBLICA / JOGADOR LÊ E COMENTA)
+// ==========================================================================
+let cacheNovidades = {};
+let cacheNovidadesLidas = {};
+let novidadeAbertaId = null;
+let novidadeEmEdicao = "";
+
+function ordemNovidades(dados) {
+    return Object.keys(dados || {}).sort((a, b) => (dados[b].publicado_em || 0) - (dados[a].publicado_em || 0));
+}
+
+function linksDaNovidade(n) {
+    return (n.links || []).filter(l => l && l.url);
+}
+
+// ---------- ADMIN ----------
+function iniciarModuloNovidadesAdmin() {
+    escutar('novidades', 'value', snapshot => {
+        cacheNovidades = snapshot.val() || {};
+        renderizarNovidadesAdmin();
+    });
+}
+
+function renderizarNovidadesAdmin() {
+    const lista = document.getElementById('lista-novidades-admin');
+    if (!lista) return;
+    const ids = ordemNovidades(cacheNovidades);
+    if (!ids.length) { lista.innerHTML = `<p class="vazio-lista">Nenhuma novidade publicada ainda.</p>`; return; }
+    lista.innerHTML = ids.map(id => {
+        const n = cacheNovidades[id];
+        const comentarios = n.comentarios || {};
+        const idsCom = Object.keys(comentarios).sort((a, b) => (comentarios[a].timestamp || 0) - (comentarios[b].timestamp || 0));
+        return `
+            <div class="user-item" style="border-left:4px solid #00ff66;">
+                <div class="user-info">
+                    <p><strong>📣 ${escapar(n.titulo || 'Sem título')}</strong></p>
+                    <p style="font-size:0.75rem; color:#8899a6;">Publicada em ${formatarData(n.publicado_em)}${n.atualizado_em ? ` · editada em ${formatarData(n.atualizado_em)}` : ''}</p>
+                    <div class="corpo-email" style="margin-top:8px;">${escapar(n.descricao || "")}</div>
+                    ${linksDaNovidade(n).length ? `<p style="margin-top:8px;"><strong>Downloads:</strong> ${linksDaNovidade(n).map(l => escapar(l.texto || l.url)).join(" · ")}</p>` : ""}
+                    <p style="margin-top:6px;"><strong>Comentários:</strong> ${n.comentarios_ativos === false ? '<span style="color:#ff5555;">desativados</span>' : '<span style="color:#00ff66;">liberados</span>'} · ${idsCom.length} recebido(s)</p>
+                    ${idsCom.length ? `<div class="lista-comentarios-admin">${idsCom.map(cid => {
+                        const c = comentarios[cid];
+                        return `<div class="comentario-item">
+                            <p class="comentario-autor">${escapar(c.nome || 'Jogador')} <span>${formatarData(c.timestamp)}</span></p>
+                            <p class="comentario-texto">${escapar(c.texto || "")}</p>
+                            <button type="button" class="btn-mini-msg perigo" onclick="excluirComentarioNovidade('${id}','${cid}')">🗑️ Excluir comentário</button>
+                        </div>`;
+                    }).join("")}</div>` : ""}
+                </div>
+                <button class="btn-inject" onclick="carregarNovidadeParaEdicao('${id}')">✏️ Editar novidade</button>
+                <button class="btn-visualizar-comprovante" onclick="alternarComentariosNovidade('${id}')">${n.comentarios_ativos === false ? '💬 Liberar comentários' : '🔇 Bloquear comentários'}</button>
+                <button class="btn-sair" style="width:100%; margin-top:6px;" onclick="excluirNovidade('${id}')">🗑️ Apagar novidade</button>
+            </div>`;
+    }).join("");
+}
+
+const formNovidade = document.getElementById('form-novidade');
+if (formNovidade) {
+    formNovidade.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const titulo = document.getElementById('novidade-titulo').value.trim();
+        const descricao = document.getElementById('novidade-descricao').value.trim();
+        if (!titulo || !descricao) return alert("Preencha o título e a descrição da novidade.");
+
+        const links = [];
+        for (let i = 1; i <= 4; i++) {
+            const texto = document.getElementById(`novidade-link-txt-${i}`).value.trim();
+            const url = document.getElementById(`novidade-link-url-${i}`).value.trim();
+            if (url) links.push({ texto: texto || `Download ${i}`, url: url });
+        }
+
+        const comentariosAtivos = document.getElementById('novidade-permitir-comentarios').checked;
+
+        try {
+            if (novidadeEmEdicao) {
+                const anterior = cacheNovidades[novidadeEmEdicao] || {};
+                await database.ref(`novidades/${novidadeEmEdicao}`).update({
+                    titulo, descricao, links, comentarios_ativos: comentariosAtivos, atualizado_em: Date.now()
+                });
+                await registrarEventoTemporada('novidade_editada', { titulo, descricao });
+                alert("🔄 Novidade atualizada!");
+            } else {
+                await database.ref('novidades').push({
+                    titulo, descricao, links,
+                    comentarios_ativos: comentariosAtivos,
+                    publicado_em: Date.now(),
+                    autor: "Administração do Hub"
+                });
+                await registrarEventoTemporada('novidade', { titulo, descricao });
+                alert("📣 Novidade publicada! Todos os jogadores serão avisados na tela.");
+            }
+            cancelarEdicaoNovidade();
+        } catch (erro) { alert("Erro ao salvar novidade: " + erro.message); }
+    });
+}
+
+function carregarNovidadeParaEdicao(id) {
+    const n = cacheNovidades[id];
+    if (!n) return;
+    novidadeEmEdicao = id;
+    document.getElementById('novidade-titulo').value = n.titulo || "";
+    document.getElementById('novidade-descricao').value = n.descricao || "";
+    document.getElementById('novidade-permitir-comentarios').checked = n.comentarios_ativos !== false;
+    for (let i = 1; i <= 4; i++) {
+        const l = (n.links || [])[i - 1] || {};
+        document.getElementById(`novidade-link-txt-${i}`).value = l.texto || "";
+        document.getElementById(`novidade-link-url-${i}`).value = l.url || "";
+    }
+    document.getElementById('titulo-form-novidade').innerText = "Editando novidade";
+    document.getElementById('btn-cancelar-novidade').style.display = "block";
+    abrirAbaAdmin('novidades');
+    window.scrollTo(0, 0);
+}
+
+function cancelarEdicaoNovidade() {
+    novidadeEmEdicao = "";
+    if (formNovidade) formNovidade.reset();
+    document.getElementById('novidade-permitir-comentarios').checked = true;
+    document.getElementById('titulo-form-novidade').innerText = "Publicar nova novidade";
+    document.getElementById('btn-cancelar-novidade').style.display = "none";
+}
+
+const btnCancelarNovidade = document.getElementById('btn-cancelar-novidade');
+if (btnCancelarNovidade) btnCancelarNovidade.addEventListener('click', cancelarEdicaoNovidade);
+
+async function excluirNovidade(id) {
+    const n = cacheNovidades[id] || {};
+    if (!confirm(`Apagar definitivamente a novidade "${n.titulo || ''}" e todos os comentários dela?`)) return;
+    try {
+        await database.ref(`novidades/${id}`).remove();
+        await registrarEventoTemporada('novidade_excluida', { titulo: n.titulo || "" });
+        if (novidadeEmEdicao === id) cancelarEdicaoNovidade();
+    } catch (erro) { alert("Erro: " + erro.message); }
+}
+
+async function alternarComentariosNovidade(id) {
+    const n = cacheNovidades[id] || {};
+    await database.ref(`novidades/${id}/comentarios_ativos`).set(n.comentarios_ativos === false);
+}
+
+async function excluirComentarioNovidade(idNovidade, idComentario) {
+    if (!confirm("Excluir este comentário?")) return;
+    await database.ref(`novidades/${idNovidade}/comentarios/${idComentario}`).remove();
+}
+
+// ---------- JOGADOR ----------
+function ouvirNovidadesCliente(uid) {
+    escutar('novidades', 'value', snapshot => {
+        cacheNovidades = snapshot.val() || {};
+        renderizarNovidadesCliente();
+    });
+    escutar(`usuarios/${uid}/novidades_lidas`, 'value', snapshot => {
+        cacheNovidadesLidas = snapshot.val() || {};
+        renderizarNovidadesCliente();
+    });
+}
+
+function idsNovidadesNaoLidas() {
+    return ordemNovidades(cacheNovidades).filter(id => !cacheNovidadesLidas[id]);
+}
+
+function renderizarNovidadesCliente() {
+    const ids = ordemNovidades(cacheNovidades);
+    const naoLidas = idsNovidadesNaoLidas();
+
+    const badge = document.getElementById('badge-novidades-nao-lidas');
+    if (badge) {
+        badge.innerText = naoLidas.length;
+        badge.style.display = naoLidas.length ? "inline-block" : "none";
+    }
+
+    const alerta = document.getElementById('alerta-novidades-novas');
+    const listaAlerta = document.getElementById('lista-alerta-novidades');
+    if (alerta && listaAlerta) {
+        if (naoLidas.length) {
+            listaAlerta.innerHTML = naoLidas.map(id => {
+                const n = cacheNovidades[id];
+                return `<button type="button" class="item-alerta-novidade" onclick="abrirNovidade('${id}')">
+                    <strong>📣 ${escapar(n.titulo || 'Novidade')}</strong>
+                    <span>${formatarData(n.publicado_em)} · toque para ler</span>
+                </button>`;
+            }).join("");
+            alerta.style.display = "block";
+        } else {
+            alerta.style.display = "none";
+        }
+    }
+
+    const lista = document.getElementById('lista-novidades-cliente');
+    if (lista) {
+        lista.innerHTML = ids.length ? ids.map(id => {
+            const n = cacheNovidades[id];
+            const lida = !!cacheNovidadesLidas[id];
+            return `<button type="button" class="item-novidade ${lida ? '' : 'nao-lida'}" onclick="abrirNovidade('${id}')">
+                <span class="item-novidade-titulo">📣 ${escapar(n.titulo || 'Novidade')} ${lida ? '' : '<em class="tag-nova">NOVA</em>'}</span>
+                <span class="item-novidade-data">${formatarData(n.publicado_em)}</span>
+                <span class="item-novidade-previa">${escapar((n.descricao || "").slice(0, 120))}${(n.descricao || "").length > 120 ? '…' : ''}</span>
+            </button>`;
+        }).join("") : `<p class="vazio-lista">Nenhuma novidade publicada até agora.</p>`;
+    }
+
+    if (novidadeAbertaId && cacheNovidades[novidadeAbertaId]) renderizarNovidadeAberta(novidadeAbertaId);
+}
+
+async function abrirNovidade(id) {
+    const n = cacheNovidades[id];
+    if (!n) return;
+    novidadeAbertaId = id;
+    renderizarNovidadeAberta(id);
+    document.getElementById('modal-novidade-detalhe').classList.add('active');
+    if (usuarioLogadoUid && !cacheNovidadesLidas[id]) {
+        try { await database.ref(`usuarios/${usuarioLogadoUid}/novidades_lidas/${id}`).set(Date.now()); } catch (e) { }
+    }
+}
+
+function fecharNovidade() {
+    novidadeAbertaId = null;
+    document.getElementById('modal-novidade-detalhe').classList.remove('active');
+}
+
+function renderizarNovidadeAberta(id) {
+    const n = cacheNovidades[id];
+    if (!n) return;
+    const ehAdmin = auth.currentUser && auth.currentUser.email === EMAIL_ADMIN;
+    document.getElementById('novidade-detalhe-titulo').innerText = n.titulo || "Novidade";
+    document.getElementById('novidade-detalhe-data').innerText = `Publicada em ${formatarData(n.publicado_em)}${n.atualizado_em ? ` · atualizada em ${formatarData(n.atualizado_em)}` : ''}`;
+    document.getElementById('novidade-detalhe-descricao').innerHTML = escapar(n.descricao || "").replace(/\n/g, "<br>");
+
+    const areaLinks = document.getElementById('novidade-detalhe-links');
+    const links = linksDaNovidade(n);
+    areaLinks.innerHTML = links.length
+        ? links.map(l => `<a class="btn-download-dinamico" href="${escapar(l.url)}" target="_blank" rel="noopener">⬇️ ${escapar(l.texto || 'Download')}</a>`).join("")
+        : "";
+
+    const comentarios = n.comentarios || {};
+    const idsCom = Object.keys(comentarios).sort((a, b) => (comentarios[a].timestamp || 0) - (comentarios[b].timestamp || 0));
+    document.getElementById('novidade-detalhe-comentarios').innerHTML = idsCom.length
+        ? idsCom.map(cid => {
+            const c = comentarios[cid];
+            return `<div class="comentario-item">
+                <p class="comentario-autor">${escapar(c.nome || 'Jogador')} <span>${formatarData(c.timestamp)}</span></p>
+                <p class="comentario-texto">${escapar(c.texto || "")}</p>
+                ${ehAdmin ? `<button type="button" class="btn-mini-msg perigo" onclick="excluirComentarioNovidade('${id}','${cid}')">🗑️ Excluir</button>` : ""}
+            </div>`;
+        }).join("")
+        : `<p class="vazio-lista">Nenhum comentário ainda. Seja o primeiro!</p>`;
+
+    const form = document.getElementById('form-comentario-novidade');
+    const aviso = document.getElementById('aviso-comentarios-bloqueados');
+    const permitido = n.comentarios_ativos !== false;
+    if (form) form.style.display = permitido && !ehAdmin ? "block" : "none";
+    if (aviso) aviso.style.display = permitido ? "none" : "block";
+}
+
+const formComentarioNovidade = document.getElementById('form-comentario-novidade');
+if (formComentarioNovidade) {
+    formComentarioNovidade.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!novidadeAbertaId || !usuarioLogadoUid) return;
+        const campo = document.getElementById('novidade-comentario-texto');
+        const texto = campo.value.trim();
+        if (!texto) return;
+        const n = cacheNovidades[novidadeAbertaId] || {};
+        try {
+            await database.ref(`novidades/${novidadeAbertaId}/comentarios`).push({
+                uid: usuarioLogadoUid,
+                nome: `${dadosClienteAtual.nome || ""} ${dadosClienteAtual.sobrenome || ""}`.trim() || "Jogador",
+                email: dadosClienteAtual.email || "",
+                texto: texto,
+                timestamp: Date.now()
+            });
+            await registrarEventoTemporada('comentario', {
+                titulo: n.titulo || "",
+                jogador: `${dadosClienteAtual.nome || ""} ${dadosClienteAtual.sobrenome || ""}`.trim(),
+                email: dadosClienteAtual.email || "",
+                whatsapp: dadosClienteAtual.whatsapp || "",
+                uid: usuarioLogadoUid,
+                descricao: texto
+            });
+            campo.value = "";
+        } catch (erro) { alert("Erro ao comentar: " + erro.message); }
+    });
+}
+
+const btnAbrirNovidades = document.getElementById('btn-abrir-novidades');
+if (btnAbrirNovidades) btnAbrirNovidades.addEventListener('click', () => {
+    renderizarNovidadesCliente();
+    document.getElementById('modal-novidades').classList.add('active');
+});
+const btnFecharNovidades = document.getElementById('btn-fechar-novidades');
+if (btnFecharNovidades) btnFecharNovidades.addEventListener('click', () => document.getElementById('modal-novidades').classList.remove('active'));
+const btnFecharNovidadeDetalhe = document.getElementById('btn-fechar-novidade-detalhe');
+if (btnFecharNovidadeDetalhe) btnFecharNovidadeDetalhe.addEventListener('click', fecharNovidade);
+const btnFecharAlertaNovidades = document.getElementById('btn-fechar-alerta-novidades');
+if (btnFecharAlertaNovidades) btnFecharAlertaNovidades.addEventListener('click', () => {
+    document.getElementById('alerta-novidades-novas').style.display = "none";
+});
+const btnFecharTemporadaDetalhe = document.getElementById('btn-fechar-temporada-detalhe');
+if (btnFecharTemporadaDetalhe) btnFecharTemporadaDetalhe.addEventListener('click', () => {
+    temporadaDetalheId = null;
+    document.getElementById('modal-temporada-detalhe').classList.remove('active');
+});
+const btnEncerrarTemporada = document.getElementById('btn-encerrar-temporada');
+if (btnEncerrarTemporada) btnEncerrarTemporada.addEventListener('click', encerrarTemporadaMensal);
+const btnExportarTemporada = document.getElementById('btn-exportar-temporada');
+if (btnExportarTemporada) btnExportarTemporada.addEventListener('click', exportarHistoricoTemporada);
