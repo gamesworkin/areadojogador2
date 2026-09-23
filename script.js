@@ -168,6 +168,156 @@ if (tabLogin && tabCadastro) {
 }
 
 // ==========================================================================
+// SUBMIT DE LOGIN E CADASTRO
+// ==========================================================================
+const formLogin = document.getElementById('form-login');
+if (formLogin) {
+    formLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const senha = loginSenhaReal ? loginSenhaReal.value : "";
+
+        if (!email || !senha) {
+            alert("Preencha todos os campos para continuar.");
+            return;
+        }
+
+        const btnLogar = document.getElementById('btn-logar');
+        const overlayAuth = document.getElementById('overlay-auth-carregando');
+        if (btnLogar) { btnLogar.disabled = true; btnLogar.innerText = "ENTRANDO..."; }
+        if (overlayAuth) overlayAuth.classList.add('active');
+
+        try {
+            await auth.signInWithEmailAndPassword(email, senha);
+        } catch (error) {
+            if (overlayAuth) overlayAuth.classList.remove('active');
+            if (btnLogar) { btnLogar.disabled = false; btnLogar.innerText = "LOGAR NO HUB"; }
+            alert("Erro ao realizar login: " + error.message);
+        }
+    });
+}
+
+const formCadastroAuth = document.getElementById('form-cadastro-auth');
+if (formCadastroAuth) {
+    formCadastroAuth.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nome = document.getElementById('cad-nome').value.trim();
+        const sobrenome = document.getElementById('cad-sobrenome').value.trim();
+        const whatsapp = document.getElementById('cad-whatsapp').value.trim();
+        const email = document.getElementById('cad-email').value.trim();
+        const senha = document.getElementById('cad-senha').value;
+
+        if (!validarProvedorEmail(email)) {
+            alert("Por favor, insira um e-mail válido com um provedor reconhecido.");
+            return;
+        }
+
+        const btnCadastrar = document.getElementById('btn-cadastrar');
+        const overlayAuth = document.getElementById('overlay-auth-carregando');
+        if (btnCadastrar) { btnCadastrar.disabled = true; btnCadastrar.innerText = "CADASTRANDO..."; }
+        if (overlayAuth) overlayAuth.classList.add('active');
+
+        try {
+            const userCredential = await auth.createUserWithEmailAndPassword(email, senha);
+            const uid = userCredential.user.uid;
+
+            await database.ref(`usuarios/${uid}`).set({
+                nome: nome,
+                sobrenome: sobrenome,
+                whatsapp: whatsapp,
+                email: email,
+                status_cadastro: "cadastrado",
+                data_criacao: Date.now()
+            });
+        } catch (error) {
+            if (overlayAuth) overlayAuth.classList.remove('active');
+            if (btnCadastrar) { btnCadastrar.disabled = false; btnCadastrar.innerText = "CADASTRAR E ENTRAR"; }
+            alert("Erro ao criar conta: " + error.message);
+        }
+    });
+}
+
+// Esqueci minha senha
+const btnEsqueciSenha = document.getElementById('btn-esqueci-senha');
+if (btnEsqueciSenha) {
+    btnEsqueciSenha.addEventListener('click', () => {
+        if (modalEsqueciSenha) modalEsqueciSenha.classList.add('active');
+    });
+}
+const btnFecharEsqueciSenha = document.getElementById('btn-fechar-esqueci-senha');
+if (btnFecharEsqueciSenha) {
+    btnFecharEsqueciSenha.addEventListener('click', () => {
+        if (modalEsqueciSenha) modalEsqueciSenha.classList.remove('active');
+    });
+}
+const formRecuperarSenha = document.getElementById('form-recuperar-senha-interno');
+if (formRecuperarSenha) {
+    formRecuperarSenha.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('recuperar-email').value.trim();
+        try {
+            await auth.sendPasswordResetEmail(email);
+            alert("E-mail de redefinição enviado com sucesso!");
+            if (modalEsqueciSenha) modalEsqueciSenha.classList.remove('active');
+        } catch (err) {
+            alert("Erro ao enviar e-mail: " + err.message);
+        }
+    });
+}
+
+// ==========================================================================
+// PAINEL ADMIN E NAVEGAÇÃO ENTRE ABAS
+// ==========================================================================
+function iniciarAmbienteAdmin() {
+    escutar('usuarios', 'value', snapshot => {
+        cacheUsuariosAdmin = snapshot.val() || {};
+        popularSelectDestinatariosAdmin();
+    });
+    ouvirSugestoesAdmin();
+    inicializarPainelAdmin();
+}
+
+const btnAbrirPainelAdmin = document.getElementById('btn-abrir-painel-admin');
+if (btnAbrirPainelAdmin) {
+    btnAbrirPainelAdmin.addEventListener('click', () => {
+        if (modalPainelAdmin) modalPainelAdmin.classList.add('active');
+    });
+}
+const btnFecharPainelAdmin = document.getElementById('btn-fechar-painel-admin');
+if (btnFecharPainelAdmin) {
+    btnFecharPainelAdmin.addEventListener('click', () => {
+        if (modalPainelAdmin) modalPainelAdmin.classList.remove('active');
+    });
+}
+
+function alternarAbaAdmin(nomeAba) {
+    document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
+        if (btn.dataset.abaAdmin === nomeAba) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+    document.querySelectorAll('.pane-admin').forEach(pane => {
+        if (pane.id === `aba-admin-${nomeAba}`) pane.classList.add('active');
+        else pane.classList.remove('active');
+    });
+}
+
+document.querySelectorAll('#barra-abas-admin .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.dataset.abaAdmin) alternarAbaAdmin(btn.dataset.abaAdmin);
+    });
+});
+
+document.querySelectorAll('.btn-atalho-admin').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const aba = btn.dataset.abrirAba;
+        if (aba) {
+            alternarAbaAdmin(aba);
+            if (modalPainelAdmin) modalPainelAdmin.classList.add('active');
+        }
+    });
+});
+
+// ==========================================================================
 // RESET TOTAL DA TELA DE LOGIN
 // ==========================================================================
 function restaurarTelaLoginDoZero() {
@@ -952,7 +1102,7 @@ if (btnExecutarEncerramentoTemporada) {
         if (!confirm(`⚠️ ATENÇÃO: Deseja encerrar a temporada "${nomeTemp}"?\n\nIsso irá arquivar os relatórios, sugestões e limpar pedidos aprovados dos utilizadores para abrir uma nova temporada.`)) return;
 
         try {
-            const metricas = calcularMetricas();
+            const metricas = { faturamento: 0, patchesVendidos: 0, totalUsuarios: Object.keys(cacheUsuariosAdmin).length, vendasPorPatch: {} };
             const snapshotSugestoes = await database.ref('sugestoes').once('value');
             const sugestoes = snapshotSugestoes.val() || {};
 
@@ -1030,11 +1180,6 @@ function verDetalhesTemporadaHistorico(id) {
         if (!t) return;
 
         document.getElementById('titulo-temporada-historico-nome').innerText = `Histórico: ${t.nome}`;
-        montarKpis(document.getElementById('kpis-temporada-historico'), [
-            { rotulo: "Faturamento", valor: formatarMoeda(t.faturamento || 0) },
-            { rotulo: "Patches Vendidos", valor: t.patches_vendidos || 0 },
-            { rotulo: "Jogadores", valor: t.total_jogadores || 0 }
-        ]);
 
         const containerVendas = document.getElementById('conteudo-vendas-temporada-historico');
         const vendas = t.vendas_por_patch || {};
@@ -1071,8 +1216,6 @@ function fecharDetalhesTemporadaHistorico() {
 // ==========================================================================
 // Inicialização do Painel Admin
 function inicializarPainelAdmin() {
-    ouvirCardsGlobaisAdmin();
-    ouvirEPovoarMenuVisualAdmin();
     ouvirNovidadesAdmin();
     renderizarHistoricoTemporadas();
 }
